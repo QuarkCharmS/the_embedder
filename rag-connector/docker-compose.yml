@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  rag-connector:
+    image: rag-connector:latest
+    container_name: rag-connector
+    ports:
+      - "8000:8000"
+    environment:
+      # Qdrant connection (use 'qdrant' if running qdrant service below, 'host.docker.internal' for host Qdrant)
+      #- QDRANT_HOST=${QDRANT_HOST:-host.docker.internal}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=${QDRANT_PORT:-6333}
+      # Logging level (DEBUG, INFO, WARNING, ERROR)
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # RAG Settings (optional overrides)
+      - TOP_K=40
+      - SCORE_THRESHOLD=${SCORE_THRESHOLD:-0.7}
+      - MODELS_FILE=/models_config/models.json
+    restart: unless-stopped
+    #network_mode: bridge
+    networks:
+      - rag-network
+    volumes:
+      - ./models_config:/models_config:ro
+    # Use host network mode if connecting to Qdrant on host
+    # network_mode: host
+
+  # Optional: Uncomment if you want to run Qdrant in Docker too
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"  # gRPC port
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+    #networks:
+    #  - bridge
+    #network_mode: bridge
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge
+
+volumes:
+  qdrant_storage:
