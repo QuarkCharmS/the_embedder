@@ -66,15 +66,15 @@ class QdrantManager:
     # ===== COLLECTION MANAGEMENT =====
 
     def create_collection(self, collection_name: str, vector_size: int,
-                         distance: Distance = Distance.COSINE, embedding_model: str = None):
+                         embedding_model: str, distance: Distance = Distance.COSINE):
         """
         Create a new Qdrant collection with specified vector configuration.
 
         Args:
             collection_name: Name of the collection to create
-            vector_size: Dimension of vectors (e.g., 1536 for text-embedding-3-small)
+            vector_size: Dimension of vectors (e.g., 3072 for text-embedding-3-large)
+            embedding_model: Embedding model used for this collection (e.g., "Qwen/Qwen3-Embedding-8B") - REQUIRED
             distance: Distance metric (default: COSINE)
-            embedding_model: Embedding model used for this collection (e.g., "Qwen/Qwen3-Embedding-8B")
 
         Raises:
             Exception: If collection already exists or creation fails
@@ -82,24 +82,32 @@ class QdrantManager:
         if self.collection_exists(collection_name):
             raise ValueError(f"Collection '{collection_name}' already exists")
 
-        # Create collection with metadata
-        from qdrant_client.models import CollectionConfig, CollectionMetadata
-
-        # Prepare metadata
-        metadata = {}
-        if embedding_model:
-            metadata["embedding_model"] = embedding_model
-
+        # Create collection
         self.client.create_collection(
             collection_name=collection_name,
-            vectors_config=VectorParams(size=vector_size, distance=distance),
-            metadata=metadata if metadata else None
+            vectors_config=VectorParams(size=vector_size, distance=distance)
         )
 
-        if embedding_model:
-            print(f"Created collection '{collection_name}' with vector size {vector_size}, embedding model: {embedding_model}")
-        else:
-            print(f"Created collection '{collection_name}' with vector size {vector_size}")
+        # Store embedding model as a special metadata point
+        # Use a reserved UUID that won't conflict with document chunks
+        import uuid
+        metadata_point_id = str(uuid.UUID('00000000-0000-0000-0000-000000000000'))
+
+        self.client.upsert(
+            collection_name=collection_name,
+            points=[{
+                "id": metadata_point_id,
+                "vector": [0.0] * vector_size,  # Zero vector
+                "payload": {
+                    "_collection_metadata": True,
+                    "embedding_model": embedding_model,
+                    "vector_size": vector_size,
+                    "distance": distance.value if hasattr(distance, 'value') else str(distance)
+                }
+            }]
+        )
+
+        print(f"Created collection '{collection_name}' with vector size {vector_size}, embedding model: {embedding_model}")
 
     def delete_collection(self, collection_name: str):
         """
@@ -165,12 +173,55 @@ class QdrantManager:
             "status": info.status
         }
 
-        # Add embedding model if available in metadata
-        if hasattr(info, 'config') and hasattr(info.config, 'metadata') and info.config.metadata:
-            if 'embedding_model' in info.config.metadata:
-                result['embedding_model'] = info.config.metadata['embedding_model']
+        # Try to get embedding model from metadata point
+        try:
+            embedding_model = self.get_collection_embedding_model(collection_name)
+            result['embedding_model'] = embedding_model
+        except ValueError:
+            # No embedding model metadata found
+            pass
 
         return result
+
+    def get_collection_embedding_model(self, collection_name: str) -> str:
+        """
+        Get the embedding model for a collection from its metadata point.
+
+        Args:
+            collection_name: Name of the collection
+
+        Returns:
+            Embedding model name stored in collection metadata
+
+        Raises:
+            ValueError: If collection doesn't exist or embedding_model not found
+        """
+        if not self.collection_exists(collection_name):
+            raise ValueError(f"Collection '{collection_name}' does not exist")
+
+        # Try to retrieve the special metadata point
+        import uuid
+        metadata_point_id = str(uuid.UUID('00000000-0000-0000-0000-000000000000'))
+
+        try:
+            points = self.client.retrieve(
+                collection_name=collection_name,
+                ids=[metadata_point_id]
+            )
+
+            if points and len(points) > 0:
+                payload = points[0].payload
+                if payload and '_collection_metadata' in payload and payload.get('embedding_model'):
+                    return payload['embedding_model']
+
+        except Exception:
+            # Metadata point doesn't exist or retrieval failed
+            pass
+
+        raise ValueError(
+            f"Collection '{collection_name}' does not have embedding_model metadata. "
+            f"This collection was created without specifying an embedding model."
+        )
 
     # ===== DATA UPLOAD =====
 

@@ -76,7 +76,7 @@ Examples:
 
   # List and manage collections
   rag-cli collections list
-  rag-cli collections create my_collection --vector-size 4096
+  rag-cli collections create my_collection --vector-size 4096 --embedding-model "Qwen/Qwen3-Embedding-8B"
   rag-cli collections info my_collection
 
 Note:
@@ -200,7 +200,8 @@ Docker Usage:
         create_parser.add_argument(
             '--embedding-model',
             type=str,
-            help='Embedding model to use for this collection (e.g., "Qwen/Qwen3-Embedding-8B")'
+            required=True,
+            help='Embedding model to use for this collection (e.g., "Qwen/Qwen3-Embedding-8B") - REQUIRED'
         )
 
         # Delete collection
@@ -249,7 +250,7 @@ Docker Usage:
             self.parser.print_help()
             return False
 
-        # Validate API token and model for upload operations
+        # Validate API token for upload operations
         if args.command == 'upload':
             if not args.api_token:
                 print("ERROR: API token is required for upload operations.", file=sys.stderr)
@@ -258,13 +259,7 @@ Docker Usage:
                 print("\nExample: export API_TOKEN=your_api_key_here", file=sys.stderr)
                 return False
 
-            if not args.model:
-                print("ERROR: Model name is required for upload operations.", file=sys.stderr)
-                print("\nSpecify with --model or set MODEL_NAME environment variable.", file=sys.stderr)
-                print("\nExample models:", file=sys.stderr)
-                print("  --model Qwen/Qwen3-Embedding-8B", file=sys.stderr)
-                print("  --model text-embedding-3-large", file=sys.stderr)
-                return False
+            # Model is optional - will be fetched from collection metadata if not provided
 
             # Check if source type was provided
             if not args.source_type:
@@ -315,9 +310,6 @@ Docker Usage:
 
         print(f"Uploading {args.source_type} to collection '{args.collection}'...")
         print(f"Qdrant: {args.qdrant_host}:{args.qdrant_port}")
-        print(f"Model: {args.model}")
-        if args.debug:
-            print(f"Debug: Enabled")
 
         try:
             # Check if collection exists BEFORE doing any expensive operations
@@ -325,8 +317,39 @@ Docker Usage:
             if not manager.collection_exists(args.collection):
                 print(f"\nERROR: Collection '{args.collection}' does not exist.", file=sys.stderr)
                 print(f"Create it first with:", file=sys.stderr)
-                print(f"  python -m app.cli collections create {args.collection} --vector-size <size>", file=sys.stderr)
+                print(f"  python -m app.cli collections create {args.collection} --vector-size <size> --embedding-model <model>", file=sys.stderr)
                 return 1
+
+            # Get embedding model from collection metadata or use provided one
+            try:
+                collection_embedding_model = manager.get_collection_embedding_model(args.collection)
+
+                if args.model:
+                    # User provided a model - validate it matches collection's model
+                    if args.model != collection_embedding_model:
+                        print(f"\n⚠ WARNING: Provided model '{args.model}' differs from collection's model '{collection_embedding_model}'", file=sys.stderr)
+                        print(f"Using collection's model: {collection_embedding_model}", file=sys.stderr)
+                    embedding_model = collection_embedding_model
+                else:
+                    # No model provided - use collection's model
+                    embedding_model = collection_embedding_model
+                    print(f"Using embedding model from collection: {embedding_model}")
+
+            except ValueError as e:
+                # Collection doesn't have embedding_model in metadata
+                if args.model:
+                    # User provided model - use it
+                    embedding_model = args.model
+                    print(f"⚠ Collection has no embedding_model metadata. Using provided model: {embedding_model}")
+                else:
+                    # No model anywhere
+                    print(f"\nERROR: Collection '{args.collection}' has no embedding_model metadata.", file=sys.stderr)
+                    print(f"Please specify a model with --model flag.", file=sys.stderr)
+                    return 1
+
+            print(f"Embedding Model: {embedding_model}")
+            if args.debug:
+                print(f"Debug: Enabled")
             if args.source_type == 'file':
                 file_path = Path(args.path).resolve()
                 if not file_path.exists():
@@ -336,7 +359,7 @@ Docker Usage:
                 FileHandler.handle(
                     file_path=str(file_path),
                     collection_name=args.collection,
-                    embedding_model=args.model,
+                    embedding_model=embedding_model,
                     api_token=args.api_token,
                     relative_path=file_path.name,
                     debug_level=debug_level
@@ -348,7 +371,7 @@ Docker Usage:
                 handler.handle(
                     git_url=args.url,
                     collection_name=args.collection,
-                    embedding_model=args.model,
+                    embedding_model=embedding_model,
                     api_token=args.api_token,
                     debug_level=debug_level,
                     git_token=args.git_token
@@ -365,7 +388,7 @@ Docker Usage:
                 handler.handle(
                     archive_path=str(archive_path),
                     collection_name=args.collection,
-                    embedding_model=args.model,
+                    embedding_model=embedding_model,
                     api_token=args.api_token,
                     debug_level=debug_level
                 )
@@ -413,13 +436,10 @@ Docker Usage:
                 manager.create_collection(
                     collection_name=args.name,
                     vector_size=args.vector_size,
-                    distance=distance,
-                    embedding_model=args.embedding_model
+                    embedding_model=args.embedding_model,
+                    distance=distance
                 )
-                if args.embedding_model:
-                    print(f"✓ Created collection '{args.name}' (vector_size={args.vector_size}, distance={args.distance}, embedding_model={args.embedding_model})")
-                else:
-                    print(f"✓ Created collection '{args.name}' (vector_size={args.vector_size}, distance={args.distance})")
+                print(f"✓ Created collection '{args.name}' (vector_size={args.vector_size}, distance={args.distance}, embedding_model={args.embedding_model})")
                 return 0
 
             elif args.action == 'delete':
