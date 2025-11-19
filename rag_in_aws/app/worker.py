@@ -11,7 +11,7 @@ Examples:
     python -m app.worker upload_repo https://github.com/user/repo.git collection_name
     python -m app.worker upload_file /data/file.pdf collection_name
     python -m app.worker upload_archive /data/docs.zip collection_name
-    python -m app.worker collection_create my_collection 1536
+    python -m app.worker collection_create my_collection 1536  # Requires MODEL_NAME env var
     python -m app.worker collection_delete my_collection
     python -m app.worker collection_list
 """
@@ -117,13 +117,18 @@ def collection_create(collection_name: str, dimension: str):
 
     qdrant_host = os.getenv("QDRANT_HOST", "localhost")
     qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+    embedding_model = os.getenv("MODEL_NAME")
+
+    if not embedding_model:
+        raise ValueError("MODEL_NAME environment variable required")
 
     print(f"Creating collection: {collection_name}")
     print(f"Dimension: {dimension}")
+    print(f"Embedding Model: {embedding_model}")
     print(f"Qdrant: {qdrant_host}:{qdrant_port}")
 
     manager = QdrantManager(host=qdrant_host, port=qdrant_port)
-    manager.create_collection(collection_name, int(dimension))
+    manager.create_collection(collection_name, int(dimension), embedding_model)
 
     print(f"Collection '{collection_name}' created successfully")
 
@@ -172,7 +177,7 @@ def main():
         print("  upload_repo <repo_url> <collection> [--git-token <token>]")
         print("  upload_file <file_path> <collection>")
         print("  upload_archive <archive_path> <collection>")
-        print("  collection_create <name> <dimension>")
+        print("  collection_create <name> <dimension>  # Requires MODEL_NAME env var")
         print("  collection_delete <name>")
         print("  collection_list")
         sys.exit(1)
