@@ -24,6 +24,9 @@ from qdrant_client.models import VectorParams, Distance, PointStruct, Collection
 from app.embedder import Embedder
 from app.qdrant_chunker import file_to_qdrant_chunks
 from app.git_utils import smart_git_clone, get_repo_name_from_url, GitCloneError
+from app.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class QdrantManager:
@@ -107,7 +110,7 @@ class QdrantManager:
             }]
         )
 
-        print(f"Created collection '{collection_name}' with vector size {vector_size}, embedding model: {embedding_model}")
+        logger.info(f"Created collection '{collection_name}' with vector size {vector_size}, embedding model: {embedding_model}")
 
     def delete_collection(self, collection_name: str):
         """
@@ -123,7 +126,7 @@ class QdrantManager:
             raise ValueError(f"Collection '{collection_name}' does not exist")
 
         self.client.delete_collection(collection_name=collection_name)
-        print(f"Deleted collection '{collection_name}'")
+        logger.info(f"Deleted collection '{collection_name}'")
 
     def collection_exists(self, collection_name: str) -> bool:
         """
@@ -273,12 +276,12 @@ class QdrantManager:
                         }
                     ))
                 except Exception as e:
-                    print(f"Error generating embedding for chunk {chunk.get_id()}: {e}")
+                    logger.error(f"Error generating embedding for chunk {chunk.get_id()}: {e}")
                     raise
 
         # Upload to Qdrant
         self.client.upsert(collection_name=collection_name, points=points)
-        print(f"Uploaded {len(points)} chunks to collection '{collection_name}'")
+        logger.info(f"Uploaded {len(points)} chunks to collection '{collection_name}'")
 
     def upload_chunks_with_embeddings(self, collection_name: str, qdrant_chunks: List,
                                      embedding_model: str, api_token: str, replace_existing: bool = True):
@@ -338,18 +341,18 @@ class QdrantManager:
 
             if existing_hash is None:
                 # New file - upload it
-                print(f"  New file detected: {file_path}")
+                logger.info(f"New file detected: {file_path}")
                 chunks_to_upload.extend(file_chunks)
                 stats['added'].append((file_path, num_chunks))
             elif existing_hash != new_hash:
                 # File changed - replace it
-                print(f"  File changed detected: {file_path}")
+                logger.info(f"File changed detected: {file_path}")
                 self._delete_file_by_path(collection_name, file_path)
                 chunks_to_upload.extend(file_chunks)
                 stats['modified'].append((file_path, num_chunks))
             else:
                 # File unchanged - skip it
-                print(f"  File unchanged, skipping: {file_path}")
+                logger.info(f"File unchanged, skipping: {file_path}")
                 stats['unchanged'].append((file_path, num_chunks))
 
         # Upload only the chunks that need to be uploaded
@@ -357,7 +360,7 @@ class QdrantManager:
             embedder = self._get_embedder(embedding_model=embedding_model, api_token=api_token)
             self.upload_chunks(collection_name, chunks_to_upload, embedder)
         else:
-            print("No files to upload (all files unchanged)")
+            logger.info("No files to upload (all files unchanged)")
 
         return stats
 
@@ -428,7 +431,7 @@ class QdrantManager:
             collection_name=collection_name,
             points_selector=point_ids
         )
-        print(f"Deleted {len(point_ids)} points from collection '{collection_name}'")
+        logger.info(f"Deleted {len(point_ids)} points from collection '{collection_name}'")
 
     def _delete_file_by_path(self, collection_name: str, file_path: str) -> int:
         """
@@ -470,7 +473,7 @@ class QdrantManager:
                 collection_name=collection_name,
                 points_selector=point_ids
             )
-            print(f"Deleted {len(point_ids)} existing chunks for file '{file_path}'")
+            logger.info(f"Deleted {len(point_ids)} existing chunks for file '{file_path}'")
 
         return len(point_ids)
 
@@ -601,23 +604,22 @@ class QdrantManager:
         # Extract repo name from URL
         repo_name = get_repo_name_from_url(git_url)
 
-        print(f"Syncing repository '{repo_name}' from {git_url}")
+        logger.info(f"Syncing repository '{repo_name}' from {git_url}")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_path = Path(temp_dir) / "repo"
 
             # Smart clone with auto-detection and fallback
-            print(f"Cloning repository...")
+            logger.info("Cloning repository")
             try:
                 smart_git_clone(
                     git_url=git_url,
                     destination=repo_path,
                     git_token=git_token
                 )
-                print(f"✓ Repository cloned successfully")
+                logger.info("✓ Repository cloned successfully")
             except GitCloneError as e:
-                print(f"\n❌ Git Clone Failed:")
-                print(f"{e}")
+                logger.error(f"Git Clone Failed: {e}")
                 raise
 
             # Sync with prefix
@@ -649,7 +651,7 @@ class QdrantManager:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        print(f"Syncing file '{file_path.name}'")
+        logger.info(f"Syncing file '{file_path.name}'")
 
         # Create temp directory with just this file
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -686,7 +688,7 @@ class QdrantManager:
         embedder = self._get_embedder(embedding_model=embedding_model, api_token=api_token)
 
         # Build current file state
-        print(f"Scanning source directory...")
+        logger.info("Scanning source directory")
         if specific_files:
             # Single file mode
             current_files = {}
@@ -699,12 +701,12 @@ class QdrantManager:
             # Full directory scan
             current_files = self._scan_files(source_directory, prefix)
 
-        print(f"Found {len(current_files)} file(s) in source")
+        logger.info(f"Found {len(current_files)} file(s) in source")
 
         # Get existing state from Qdrant
-        print(f"Querying Qdrant for existing files with prefix '{prefix}'...")
+        logger.info(f"Querying Qdrant for existing files with prefix '{prefix}'")
         qdrant_files = self._get_files_by_prefix(collection_name, prefix)
-        print(f"Found {len(qdrant_files)} file(s) in Qdrant")
+        logger.info(f"Found {len(qdrant_files)} file(s) in Qdrant")
 
         # Determine operations
         to_delete = []
@@ -716,35 +718,35 @@ class QdrantManager:
             if file_path not in current_files:
                 # File was deleted
                 to_delete.extend(point_ids)
-                print(f"  - DELETE: {file_path}")
+                logger.info(f"DELETE: {file_path}")
             elif current_files[file_path][0] != old_hash:
                 # File was modified (hash changed)
                 to_update.append((file_path, point_ids, current_files[file_path][1]))
-                print(f"  - UPDATE: {file_path}")
+                logger.info(f"UPDATE: {file_path}")
 
         # Check for additions
         for file_path in current_files:
             if file_path not in qdrant_files:
                 to_add.append((file_path, current_files[file_path][1]))
-                print(f"  - ADD: {file_path}")
+                logger.info(f"ADD: {file_path}")
 
         # Execute operations
         stats = {'added': 0, 'updated': 0, 'deleted': 0}
 
         # Delete removed files
         if to_delete:
-            print(f"\nDeleting {len(to_delete)} chunks from removed files...")
+            logger.info(f"Deleting {len(to_delete)} chunks from removed files")
             self._delete_points(collection_name, to_delete)
             stats['deleted'] = len(to_delete)
 
         # Update modified files (delete old + add new)
         if to_update:
-            print(f"\nUpdating {len(to_update)} modified file(s)...")
+            logger.info(f"Updating {len(to_update)} modified file(s)")
 
             # Parallelize file chunking for updates
             def process_update(file_data):
                 file_path, old_point_ids, physical_path = file_data
-                print(f"  Re-chunking {file_path}...")
+                logger.info(f"Re-chunking {file_path}")
                 chunks = file_to_qdrant_chunks(str(physical_path), embedding_model, file_path, debug_level)
                 return file_path, old_point_ids, chunks
 
@@ -759,12 +761,12 @@ class QdrantManager:
 
         # Add new files
         if to_add:
-            print(f"\nAdding {len(to_add)} new file(s)...")
+            logger.info(f"Adding {len(to_add)} new file(s)")
 
             # Parallelize file chunking for additions
             def process_addition(file_data):
                 file_path, physical_path = file_data
-                print(f"  Chunking {file_path}...")
+                logger.info(f"Chunking {file_path}")
                 chunks = file_to_qdrant_chunks(str(physical_path), embedding_model, file_path, debug_level)
                 return chunks
 
@@ -776,7 +778,7 @@ class QdrantManager:
                 self.upload_chunks(collection_name, chunks, embedder)
                 stats['added'] += 1
 
-        print(f"\nSync complete: {stats['added']} added, {stats['updated']} updated, {stats['deleted']} chunks deleted")
+        logger.info(f"Sync complete: {stats['added']} added, {stats['updated']} updated, {stats['deleted']} chunks deleted")
         return stats
 
     def sync_archive(self, archive_path: str, collection_name: str, embedding_model: str, api_token: str, debug_level: str = "NONE") -> Dict[str, int]:
@@ -801,23 +803,21 @@ class QdrantManager:
         if not archive_path.exists():
             raise FileNotFoundError(f"Archive not found: {archive_path}")
 
-        print(f"Syncing archive: {archive_path.name}")
+        logger.info(f"Syncing archive: {archive_path.name}")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             extract_path = Path(temp_dir) / "extracted"
             extract_path.mkdir()
 
             # Extract archive
-            print(f"Extracting archive...")
+            logger.info("Extracting archive")
             self._extract_archive(archive_path, extract_path)
 
             # Analyze contents
-            print(f"Analyzing contents...")
+            logger.info("Analyzing contents")
             analysis = self._analyze_archive_contents(extract_path)
 
-            print(f"Found:")
-            print(f"  - {len(analysis['repos'])} git repository(ies)")
-            print(f"  - {len(analysis['files'])} loose file(s)")
+            logger.info(f"Found {len(analysis['repos'])} git repository(ies) and {len(analysis['files'])} loose file(s)")
 
             total_stats = {'added': 0, 'updated': 0, 'deleted': 0}
 
@@ -825,7 +825,7 @@ class QdrantManager:
             for repo_info in analysis['repos']:
                 repo_name = repo_info['name']
                 repo_path = repo_info['path']
-                print(f"\nSyncing repo: {repo_name}")
+                logger.info(f"Syncing repo: {repo_name}")
 
                 stats = self._sync_files(
                     collection_name=collection_name,
@@ -842,7 +842,7 @@ class QdrantManager:
 
             # Sync loose files (flattened)
             if analysis['files']:
-                print(f"\nSyncing {len(analysis['files'])} loose file(s)...")
+                logger.info(f"Syncing {len(analysis['files'])} loose file(s)")
                 embedder = self._get_embedder(embedding_model=embedding_model, api_token=api_token)
 
                 for file_info in analysis['files']:
@@ -859,19 +859,19 @@ class QdrantManager:
 
                         if old_hash != new_hash:
                             # Update file
-                            print(f"  Updating {filename}...")
+                            logger.info(f"Updating {filename}")
                             self._delete_points(collection_name, old_point_ids)
                             chunks = file_to_qdrant_chunks(str(file_path), embedding_model, filename, debug_level)
                             self.upload_chunks(collection_name, chunks, embedder)
                             total_stats['updated'] += 1
                     else:
                         # New file
-                        print(f"  Adding {filename}...")
+                        logger.info(f"Adding {filename}")
                         chunks = file_to_qdrant_chunks(str(file_path), embedding_model, filename, debug_level)
                         self.upload_chunks(collection_name, chunks, embedder)
                         total_stats['added'] += 1
 
-            print(f"\nArchive sync complete: {total_stats['added']} added, {total_stats['updated']} updated, {total_stats['deleted']} chunks deleted")
+            logger.info(f"Archive sync complete: {total_stats['added']} added, {total_stats['updated']} updated, {total_stats['deleted']} chunks deleted")
             return total_stats
 
     def _analyze_archive_contents(self, extract_path: Path) -> Dict[str, List]:
@@ -909,7 +909,7 @@ class QdrantManager:
                     'path': root_path
                 })
                 processed_paths.add(root_path)
-                print(f"  Found repo: {repo_name}")
+                logger.info(f"Found repo: {repo_name}")
 
         # Second pass: Collect loose files (not in repos)
         for file_path in extract_path.rglob("*"):
