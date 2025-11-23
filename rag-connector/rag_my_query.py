@@ -27,7 +27,8 @@ class Pipeline:
             response = httpx.post(
                 self.api_url,
                 json={
-                    "message": conversation_context,
+                    "message": user_message,  # Last message only (for RAG search)
+                    "conversation": conversation_context,  # Full conversation (for model)
                     "collection_name": self.collection_name,
                     "api_key": self.deepinfra_api_key,
                     "top_k": self.top_k

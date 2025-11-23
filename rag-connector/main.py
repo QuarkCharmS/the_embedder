@@ -19,6 +19,7 @@ logger.info(f"Connected to Qdrant at {os.getenv('QDRANT_URL', 'http://qdrant:633
 
 class SearchRequest(BaseModel):
     message: str
+    conversation: str
     collection_name: str
     api_key: str
     top_k: int = 5
@@ -115,7 +116,7 @@ async def search(request: SearchRequest):
     """Embed query, search Qdrant, and generate response"""
     logger.info(f"Query: {request.message[:50]}... | Collection: {request.collection_name}")
 
-    # Get embedding
+    # Get embedding for LAST MESSAGE ONLY (for RAG search)
     try:
         embedding = await get_embedding(request.message, request.api_key)
     except HTTPException:
@@ -139,10 +140,10 @@ async def search(request: SearchRequest):
     # Build context
     context = "\n\n".join([hit.payload.get("text", str(hit.payload)) for hit in results])
 
-    # Classify intent and generate response
+    # Classify intent and generate response using FULL CONVERSATION
     try:
-        intent = await decide_intent(request.message, request.api_key)
-        response = await get_response(context, request.message, intent, request.api_key)
+        intent = await decide_intent(request.conversation, request.api_key)
+        response = await get_response(context, request.conversation, intent, request.api_key)
         logger.info("Response generated")
     except Exception as e:
         logger.error(f"LLM error: {str(e)}")

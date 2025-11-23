@@ -40,43 +40,40 @@ class RAGCli:
 Environment Variables:
   QDRANT_HOST              Qdrant server host (default: localhost)
   QDRANT_PORT              Qdrant server port (default: 6333)
-  MODEL_NAME               Embedding model name
-  API_TOKEN                API token for your embedding provider (recommended)
+  API_TOKEN                API token for your embedding provider (required for uploads)
   GITHUB_TOKEN             GitHub personal access token (for private repos)
   DEBUG                    Enable verbose output (true/false)
 
-Model Support:
-  This CLI supports any embedding model compatible with your embedder.
-  Common examples include:
+Embedding Models:
+  The embedding model is stored in the collection metadata when you create a collection.
+  During uploads, the model is automatically retrieved from the collection's metadata.
+
+  Supported models include:
     - Qwen/Qwen3-Embedding-8B (DeepInfra)
     - text-embedding-3-small, text-embedding-3-large (OpenAI)
     - voyage-2, voyage-code-2 (Voyage AI)
     - And many more...
 
-  Specify your model with --model and provide the appropriate API token.
-
 Examples:
-  # Upload a repository (uses MODEL_NAME and API_TOKEN from .env)
+  # Create a collection with an embedding model
+  rag-cli collections create my_collection --vector-size 4096 --embedding-model "Qwen/Qwen3-Embedding-8B"
+
+  # Upload a repository (uses embedding model from collection metadata)
   rag-cli upload repo https://github.com/user/repo.git my_collection
 
-  # IMPORTANT: Global options (--model, --api-token, etc.) must come BEFORE the command
-  # Upload with custom Qdrant host and explicit model
-  rag-cli --qdrant-host qdrant.example.com \\
-    --model Qwen/Qwen3-Embedding-8B \\
-    --api-token $API_TOKEN \\
+  # Upload with custom Qdrant host
+  rag-cli --qdrant-host qdrant.example.com --api-token $API_TOKEN \\
     upload repo https://github.com/user/repo.git my_collection
 
   # Upload a single file with verbose output
   rag-cli --debug upload file /path/to/document.pdf my_collection
 
-  # Upload archive with environment variables
+  # Upload archive
   export API_TOKEN=xxx
-  export MODEL_NAME=text-embedding-3-large
   rag-cli upload archive project.tar.gz my_collection
 
   # List and manage collections
   rag-cli collections list
-  rag-cli collections create my_collection --vector-size 4096 --embedding-model "Qwen/Qwen3-Embedding-8B"
   rag-cli collections info my_collection
 
 Note:
@@ -84,13 +81,14 @@ Note:
   - Only uploads new/changed files (hash comparison)
   - Skips unchanged files (no unnecessary API calls)
   - For repos: Automatically deletes chunks for removed files
+  - Embedding model is automatically fetched from collection metadata
 
 Docker Usage:
   # Build the image
   docker build -t rag-cli .
 
   # Run with environment variables
-  docker run -e API_TOKEN=xxx -e QDRANT_HOST=qdrant -e MODEL_NAME=your-model \\
+  docker run -e API_TOKEN=xxx -e QDRANT_HOST=qdrant \\
     rag-cli upload repo https://github.com/user/repo.git my_collection
 
   # Run with env file
@@ -109,11 +107,6 @@ Docker Usage:
             type=int,
             default=int(os.getenv('QDRANT_PORT', '6333')),
             help='Qdrant server port (env: QDRANT_PORT)'
-        )
-        parser.add_argument(
-            '--model',
-            default=os.getenv('MODEL_NAME'),
-            help='Embedding model name (env: MODEL_NAME)'
         )
         parser.add_argument(
             '--api-token',
@@ -259,8 +252,6 @@ Docker Usage:
                 print("\nExample: export API_TOKEN=your_api_key_here", file=sys.stderr)
                 return False
 
-            # Model is optional - will be fetched from collection metadata if not provided
-
             # Check if source type was provided
             if not args.source_type:
                 print(f"ERROR: Please specify source type for {args.command} command.", file=sys.stderr)
@@ -320,34 +311,16 @@ Docker Usage:
                 print(f"  python -m app.cli collections create {args.collection} --vector-size <size> --embedding-model <model>", file=sys.stderr)
                 return 1
 
-            # Get embedding model from collection metadata or use provided one
+            # Get embedding model from collection metadata
             try:
-                collection_embedding_model = manager.get_collection_embedding_model(args.collection)
-
-                if args.model:
-                    # User provided a model - validate it matches collection's model
-                    if args.model != collection_embedding_model:
-                        print(f"\n⚠ WARNING: Provided model '{args.model}' differs from collection's model '{collection_embedding_model}'", file=sys.stderr)
-                        print(f"Using collection's model: {collection_embedding_model}", file=sys.stderr)
-                    embedding_model = collection_embedding_model
-                else:
-                    # No model provided - use collection's model
-                    embedding_model = collection_embedding_model
-                    print(f"Using embedding model from collection: {embedding_model}")
-
+                embedding_model = manager.get_collection_embedding_model(args.collection)
+                print(f"Embedding Model: {embedding_model}")
             except ValueError as e:
-                # Collection doesn't have embedding_model in metadata
-                if args.model:
-                    # User provided model - use it
-                    embedding_model = args.model
-                    print(f"⚠ Collection has no embedding_model metadata. Using provided model: {embedding_model}")
-                else:
-                    # No model anywhere
-                    print(f"\nERROR: Collection '{args.collection}' has no embedding_model metadata.", file=sys.stderr)
-                    print(f"Please specify a model with --model flag.", file=sys.stderr)
-                    return 1
-
-            print(f"Embedding Model: {embedding_model}")
+                print(f"\nERROR: Collection '{args.collection}' has no embedding_model metadata.", file=sys.stderr)
+                print(f"This collection was likely created before embedding model metadata was required.", file=sys.stderr)
+                print(f"Please recreate the collection with:", file=sys.stderr)
+                print(f"  python -m app.cli collections create {args.collection} --vector-size <size> --embedding-model <model>", file=sys.stderr)
+                return 1
             if args.debug:
                 print(f"Debug: Enabled")
             if args.source_type == 'file':
