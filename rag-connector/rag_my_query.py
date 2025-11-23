@@ -18,11 +18,16 @@ class Pipeline:
         """Return RAG-based LLM response to user"""
         logger.info(f"[PIPE] Processing query: {user_message[:100]}...")
 
+        # Convert messages list to a string for the backend
+        conversation_context = "\n".join([
+            f"{msg['role']}: {msg['content']}" for msg in messages
+        ])
+
         try:
             response = httpx.post(
                 self.api_url,
                 json={
-                    "message": user_message,
+                    "message": conversation_context,
                     "collection_name": self.collection_name,
                     "api_key": self.deepinfra_api_key,
                     "top_k": self.top_k
