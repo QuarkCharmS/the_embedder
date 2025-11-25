@@ -1,0 +1,42 @@
+# Universal Document Reader Requirements
+# Install with: pip install -r requirements.txt
+
+# Encoding detection (highly recommended)
+chardet>=5.0.0
+
+# PDF reading
+PyPDF2>=3.0.0
+
+# Microsoft Word document reading (.docx, .doc)
+python-docx>=0.8.11
+
+# OpenDocument formats (.odt, .ods, .odp)
+odfpy>=1.4.1
+
+# Excel file reading (.xlsx, .xls)
+openpyxl>=3.0.9
+
+# PowerPoint reading (.pptx, .ppt)
+python-pptx>=0.6.21
+
+# RTF file reading
+striprtf>=0.0.26
+
+# HTML and XML parsing
+beautifulsoup4>=4.11.0
+
+# Markdown processing
+markdown>=3.4.0
+
+
+# New requirements for embedding and vector database
+sentence-transformers>=2.7.0
+qdrant-client>=1.7.0
+torch
+transformers>=4.51.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# .gitignore pattern matching
+pathspec>=0.11.0

@@ -1,0 +1,14 @@
+# Optional runtime dependencies
+# Install only the runtimes you need
+
+# Docker runtime
+# Install with: pip install docker
+docker>=6.0.0
+
+# Kubernetes runtime
+# Install with: pip install kubernetes
+kubernetes>=25.0.0
+
+# AWS runtime (Batch, ECS)
+# Install with: pip install boto3
+boto3>=1.26.0

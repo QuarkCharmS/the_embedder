@@ -4,7 +4,7 @@ End-to-end Retrieval-Augmented Generation stack that handles ingestion, chunking
 
 ## Stack Overview
 
-- **`rag_in_aws/` – Ingestion CLI:** CLI + worker jobs that pull files, repos, or archives, chunk them with `the_chunker`, embed via your provider (DeepInfra/OpenAI/etc.), and upsert to Qdrant. Supports sync operations, SSH/HTTPS Git auth, Docker/Kubernetes/AWS Batch runtimes, and Terraform blueprints.
+- **`rag_embedder/` – Ingestion CLI:** CLI + worker jobs that pull files, repos, or archives, chunk them with `the_chunker`, embed via your provider (DeepInfra/OpenAI/etc.), and upsert to Qdrant. Supports sync operations, SSH/HTTPS Git auth, Docker/Kubernetes/AWS Batch runtimes, and Terraform blueprints.
 - **`the_chunker/` – Semantic chunking engine:** Tree-sitter aware chunker exposed as a Python package. Produces token-aware overlapping chunks and is also vendored into the CLI Docker image.
 - **`rag-connector/` – Retrieval API & pipelines:** FastAPI service that embeds incoming queries, searches Qdrant, classifies intent (“code” vs “explain”), and forwards the conversation to the right DeepInfra model. Includes Open WebUI pipeline scripts to call the connector.
 - **Top-level Docker Compose:** Boots Qdrant, the rag-connector, Open WebUI, and the Open WebUI pipelines service so you can demo the whole flow locally.
@@ -13,20 +13,20 @@ End-to-end Retrieval-Augmented Generation stack that handles ingestion, chunking
 
 | Path | Purpose |
 | --- | --- |
-| `rag_in_aws/app` | CLI entrypoints, handlers, embedder, Qdrant manager/uploader, git utilities |
-| `rag_in_aws/docs` | Deep documentation: architecture, handler guides, Git auth, project summary |
-| `rag_in_aws/terraform` | `infra/` for shared AWS networking + Batch, `app/` for job definitions |
+| `rag_embedder/app` | CLI entrypoints, handlers, embedder, Qdrant manager/uploader, git utilities |
+| `rag_embedder/docs` | Deep documentation: architecture, handler guides, Git auth, project summary |
+| `rag_embedder/terraform` | `infra/` for shared AWS networking + Batch, `app/` for job definitions |
 | `the_chunker/src/the_chunker` | Chunking package used both standalone and from the CLI |
 | `rag-connector/main.py` | FastAPI app exposing `POST /search` |
 | `rag-connector/rag_my_query.py` | Open WebUI pipeline that proxies user chats to the connector |
 | `docker-compose.yml` (root) | Spins up Open WebUI, its pipelines service, rag-connector, and Qdrant |
-| `RAG-Strategy.txt`, `rag_in_aws/docs/*` | Planning docs, strategy notes, and design discussions |
+| `RAG-Strategy.txt`, `rag_embedder/docs/*` | Planning docs, strategy notes, and design discussions |
 
 ## End-to-End Flow
 
 ```
 ┌──────────────┐   chunk+embed   ┌──────────────┐   semantic hits   ┌───────────────┐
-│ Sources      │ ───────────────▶│ rag_in_aws   │──────────────────▶│   Qdrant      │
+│ Sources      │ ───────────────▶│ rag_embedder │──────────────────▶│   Qdrant      │
 │ files/repos  │                 │ CLI/worker   │                   │  collections  │
 └──────────────┘                 └──────────────┘                   └──────┬────────┘
                                                                            │
@@ -53,7 +53,7 @@ End-to-end Retrieval-Augmented Generation stack that handles ingestion, chunking
 # Install the chunker locally so the CLI can import it
 pip install -e the_chunker
 
-cd rag_in_aws
+cd rag_embedder
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -72,7 +72,7 @@ Key environment variables (can also be passed as CLI flags):
 ### 2. Create a collection & ingest content
 
 ```bash
-# Inside rag_in_aws/
+# Inside rag_embedder/
 python -m app.cli collections create my_collection \
   --vector-size 4096 \
   --embedding-model "Qwen/Qwen3-Embedding-8B"
@@ -83,7 +83,7 @@ python -m app.cli upload repo https://github.com/user/repo.git my_collection
 python -m app.cli sync repo https://github.com/user/repo.git my_collection
 ```
 
-See `rag_in_aws/README.md` and `docs/` for the full command surface, runtimes (Docker, Kubernetes, AWS Batch), and troubleshooting steps.
+See `rag_embedder/README.md` and `docs/` for the full command surface, runtimes (Docker, Kubernetes, AWS Batch), and troubleshooting steps.
 
 ### 3. Run the retrieval stack
 
@@ -133,20 +133,20 @@ If you prefer to call the connector directly, send a `POST` to `http://localhost
 
 ## Deployment Notes
 
-- **Docker:** `rag_in_aws/Dockerfile` builds the CLI image (embedding `the_chunker`). `rag-connector/Dockerfile` builds the FastAPI service with health checks.
-- **AWS:** `rag_in_aws/terraform/infra` provisions core infrastructure (VPC, Batch, compute environments). `rag_in_aws/terraform/app` defines job queues and containerized ingestion jobs that call the CLI worker.
-- **Chunker reuse:** `the_chunker` is a standalone package – install it where you need semantic chunking (`pip install -e the_chunker` or publish it to your index). `rag_in_aws` imports it via `turn_file_to_chunks`.
+- **Docker:** `rag_embedder/Dockerfile` builds the CLI image (embedding `the_chunker`). `rag-connector/Dockerfile` builds the FastAPI service with health checks.
+- **AWS:** `rag_embedder/terraform/infra` provisions core infrastructure (VPC, Batch, compute environments). `rag_embedder/terraform/app` defines job queues and containerized ingestion jobs that call the CLI worker.
+- **Chunker reuse:** `the_chunker` is a standalone package – install it where you need semantic chunking (`pip install -e the_chunker` or publish it to your index). `rag_embedder` imports it via `turn_file_to_chunks`.
 
 ## Testing & Quality
 
-- Ingestion CLI integration tests: `cd rag_in_aws && pytest tests/`
+- Ingestion CLI integration tests: `cd rag_embedder && pytest tests/`
 - Chunker unit test: `cd the_chunker && pytest -q test_chunker.py`
 - rag-connector manual test: `uvicorn main:app --reload` then `curl http://localhost:8000/` or `curl -X POST .../search`
 
 ## Useful References
 
-- `rag_in_aws/README.md` – CLI usage, supported file types, Docker instructions
-- `rag_in_aws/docs/` – architecture deep dives, handler details, Git auth guide, system overview
+- `rag_embedder/README.md` – CLI usage, supported file types, Docker instructions
+- `rag_embedder/docs/` – architecture deep dives, handler details, Git auth guide, system overview
 - `rag-connector/DEBUGGING.md` – verbose logging walkthroughs and troubleshooting tips
 - `the_chunker/README.md` – chunker API, configuration knobs, tokenizer behavior
 - `RAG-Strategy.txt` – product goals and backlog ideas
