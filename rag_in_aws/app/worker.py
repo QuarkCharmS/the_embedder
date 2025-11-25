@@ -1,54 +1,51 @@
 """
-Worker entry point for job execution.
+Container worker entry point for executing RAG operations.
 
-This module is the entry point when running jobs in containers.
-It handles the actual execution of operations (upload, collection management, etc.).
+Provides lightweight CLI for Docker/Kubernetes execution without Click dependency.
 
-Usage:
-    python -m app.worker <operation> <args...>
+Operations: upload_repo, upload_file, upload_archive, collection_create, 
+collection_delete, collection_list
 
-Examples:
-    python -m app.worker upload_repo https://github.com/user/repo.git collection_name
-    python -m app.worker upload_file /data/file.pdf collection_name
-    python -m app.worker upload_archive /data/docs.zip collection_name
-    python -m app.worker collection_create my_collection 1536  # Requires MODEL_NAME env var
-    python -m app.worker collection_delete my_collection
-    python -m app.worker collection_list
+See ARCHITECTURE.md for detailed flow and logic.
 """
 
 import sys
 import os
 from pathlib import Path
 
-# Ensure app module is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+def _get_env_config():
+    """Get common environment configuration."""
+    return {
+        'qdrant_host': os.getenv("QDRANT_HOST", "localhost"),
+        'qdrant_port': int(os.getenv("QDRANT_PORT", "6333")),
+        'embedding_model': os.getenv("MODEL_NAME"),
+        'api_token': os.getenv("API_TOKEN")
+    }
 
 
 def upload_repo(repo_url: str, collection_name: str, git_token: str = None):
     """Execute repository upload."""
     from app.handlers import RepoHandler
 
-    # Get config from environment
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-    embedding_model = os.getenv("MODEL_NAME")
-    api_token = os.getenv("API_TOKEN")
-    github_token = git_token or os.getenv("GITHUB_TOKEN")
-
-    if not embedding_model or not api_token:
+    config = _get_env_config()
+    if not config['embedding_model'] or not config['api_token']:
         raise ValueError("MODEL_NAME and API_TOKEN environment variables required")
+
+    github_token = git_token or os.getenv("GITHUB_TOKEN")
 
     print(f"Uploading repository: {repo_url}")
     print(f"Collection: {collection_name}")
-    print(f"Embedding Model: {embedding_model}")
-    print(f"Qdrant: {qdrant_host}:{qdrant_port}")
+    print(f"Embedding Model: {config['embedding_model']}")
 
     handler = RepoHandler()
     handler.handle(
         git_url=repo_url,
         collection_name=collection_name,
-        embedding_model=embedding_model,
-        api_token=api_token,
+        embedding_model=config['embedding_model'],
+        api_token=config['api_token'],
         git_token=github_token,
         debug_level="NONE"
     )
@@ -60,23 +57,19 @@ def upload_file(file_path: str, collection_name: str):
     """Execute file upload."""
     from app.handlers import FileHandler
 
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-    embedding_model = os.getenv("MODEL_NAME")
-    api_token = os.getenv("API_TOKEN")
-
-    if not embedding_model or not api_token:
+    config = _get_env_config()
+    if not config['embedding_model'] or not config['api_token']:
         raise ValueError("MODEL_NAME and API_TOKEN environment variables required")
 
     print(f"Uploading file: {file_path}")
     print(f"Collection: {collection_name}")
-    print(f"Embedding Model: {embedding_model}")
+    print(f"Embedding Model: {config['embedding_model']}")
 
     FileHandler.handle(
         file_path=file_path,
         collection_name=collection_name,
-        embedding_model=embedding_model,
-        api_token=api_token,
+        embedding_model=config['embedding_model'],
+        api_token=config['api_token'],
         debug_level="NONE"
     )
 
@@ -87,24 +80,20 @@ def upload_archive(archive_path: str, collection_name: str):
     """Execute archive upload."""
     from app.handlers import ArchiveHandler
 
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-    embedding_model = os.getenv("MODEL_NAME")
-    api_token = os.getenv("API_TOKEN")
-
-    if not embedding_model or not api_token:
+    config = _get_env_config()
+    if not config['embedding_model'] or not config['api_token']:
         raise ValueError("MODEL_NAME and API_TOKEN environment variables required")
 
     print(f"Uploading archive: {archive_path}")
     print(f"Collection: {collection_name}")
-    print(f"Embedding Model: {embedding_model}")
+    print(f"Embedding Model: {config['embedding_model']}")
 
     handler = ArchiveHandler()
     handler.handle(
         archive_path=archive_path,
         collection_name=collection_name,
-        embedding_model=embedding_model,
-        api_token=api_token,
+        embedding_model=config['embedding_model'],
+        api_token=config['api_token'],
         debug_level="NONE"
     )
 
@@ -115,20 +104,16 @@ def collection_create(collection_name: str, dimension: str):
     """Create a collection."""
     from app.qdrant_manager import QdrantManager
 
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
-    embedding_model = os.getenv("MODEL_NAME")
-
-    if not embedding_model:
+    config = _get_env_config()
+    if not config['embedding_model']:
         raise ValueError("MODEL_NAME environment variable required")
 
     print(f"Creating collection: {collection_name}")
     print(f"Dimension: {dimension}")
-    print(f"Embedding Model: {embedding_model}")
-    print(f"Qdrant: {qdrant_host}:{qdrant_port}")
+    print(f"Embedding Model: {config['embedding_model']}")
 
-    manager = QdrantManager(host=qdrant_host, port=qdrant_port)
-    manager.create_collection(collection_name, int(dimension), embedding_model)
+    manager = QdrantManager(host=config['qdrant_host'], port=config['qdrant_port'])
+    manager.create_collection(collection_name, int(dimension), config['embedding_model'])
 
     print(f"Collection '{collection_name}' created successfully")
 
@@ -137,13 +122,11 @@ def collection_delete(collection_name: str):
     """Delete a collection."""
     from app.qdrant_manager import QdrantManager
 
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+    config = _get_env_config()
 
     print(f"Deleting collection: {collection_name}")
-    print(f"Qdrant: {qdrant_host}:{qdrant_port}")
 
-    manager = QdrantManager(host=qdrant_host, port=qdrant_port)
+    manager = QdrantManager(host=config['qdrant_host'], port=config['qdrant_port'])
     manager.delete_collection(collection_name)
 
     print(f"Collection '{collection_name}' deleted successfully")
@@ -153,12 +136,11 @@ def collection_list():
     """List all collections."""
     from app.qdrant_manager import QdrantManager
 
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+    config = _get_env_config()
 
-    print(f"Listing collections from Qdrant: {qdrant_host}:{qdrant_port}")
+    print("Listing collections from Qdrant")
 
-    manager = QdrantManager(host=qdrant_host, port=qdrant_port)
+    manager = QdrantManager(host=config['qdrant_host'], port=config['qdrant_port'])
     collections = manager.list_collections()
 
     if collections:
@@ -177,7 +159,7 @@ def main():
         print("  upload_repo <repo_url> <collection> [--git-token <token>]")
         print("  upload_file <file_path> <collection>")
         print("  upload_archive <archive_path> <collection>")
-        print("  collection_create <name> <dimension>  # Requires MODEL_NAME env var")
+        print("  collection_create <name> <dimension>")
         print("  collection_delete <name>")
         print("  collection_list")
         sys.exit(1)

@@ -1,7 +1,9 @@
 """
-Configuration management for the RAG system.
+Shared configuration constants and environment variables.
 
-Handles environment detection and configuration loading.
+Contains file size limits, chunk sizes, supported extensions, and color definitions.
+
+See ARCHITECTURE.md for usage details.
 """
 
 import os

@@ -1,6 +1,16 @@
-import requests
-from typing import List
+"""
+Universal embedding service client with auto-provider routing.
+
+Supports OpenAI and DeepInfra models with retry logic and connection pooling.
+
+See ARCHITECTURE.md for detailed flow and logic.
+"""
+
 import time
+from typing import List
+
+import requests
+
 from app.logger import get_logger
 
 logger = get_logger(__name__)
@@ -10,7 +20,6 @@ class Embedder:
     def __init__(self, model_name: str, api_token: str):
         self.model_name = model_name
         self.api_token = api_token
-        # Use session for connection pooling and reuse
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {self.api_token}",
@@ -18,59 +27,72 @@ class Embedder:
         })
 
     def get_embedding(self, text: str) -> List[float]:
-        """Get embedding based on model name with retry logic and timeouts
+        """Get embedding for a single text with retry logic.
 
         Supports any embedding model from DeepInfra or OpenAI:
-        - Models with "/" (e.g., "Qwen/Qwen3-Embedding-8B", "BAAI/bge-large-en-v1.5") → DeepInfra
-        - Other models (e.g., "text-embedding-3-small", "text-embedding-ada-002") → OpenAI
+        - Models with "/" (e.g., "Qwen/Qwen3-Embedding-8B") → DeepInfra
+        - Other models (e.g., "text-embedding-3-small") → OpenAI
         """
+        result = self.get_embeddings_batch([text])
+        return result[0]
 
+    def get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for multiple texts in a single API call.
+
+        This is much faster than calling get_embedding multiple times.
+        Batch size is handled by the caller.
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors (same order as input texts)
+        """
         max_retries = 3
-        retry_delay = 2  # seconds
+        retry_delay = 2
 
         for attempt in range(max_retries):
             try:
-                # Pattern-based routing: models with "/" go to DeepInfra
                 if "/" in self.model_name:
-                    # DeepInfra (supports any HuggingFace model)
+                    # DeepInfra batch API
                     response = self.session.post(
                         "https://api.deepinfra.com/v1/openai/embeddings",
                         json={
-                            "input": text,
+                            "input": texts,
                             "model": self.model_name,
                             "encoding_format": "float"
                         },
-                        timeout=(10, 60)  # (connect timeout, read timeout) in seconds
+                        timeout=(10, 120)
                     )
                     response.raise_for_status()
-                    return response.json()["data"][0]["embedding"]
+                    data = response.json()["data"]
+                    return [item["embedding"] for item in data]
 
-                else:
-                    # OpenAI (supports any OpenAI embedding model)
-                    response = self.session.post(
-                        "https://api.openai.com/v1/embeddings",
-                        json={"input": text, "model": self.model_name},
-                        timeout=(10, 60)  # (connect timeout, read timeout) in seconds
-                    )
-                    response.raise_for_status()
-                    return response.json()["data"][0]["embedding"]
+                # OpenAI batch API
+                response = self.session.post(
+                    "https://api.openai.com/v1/embeddings",
+                    json={"input": texts, "model": self.model_name},
+                    timeout=(10, 120)
+                )
+                response.raise_for_status()
+                data = response.json()["data"]
+                return [item["embedding"] for item in data]
 
             except (requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
                 if attempt < max_retries - 1:
                     wait_time = retry_delay * (2 ** attempt)
-                    logger.warning(f"API request failed (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s: {e}")
+                    logger.warning(
+                        "Batch API request failed (attempt %s/%s), retrying in %ss: %s",
+                        attempt + 1, max_retries, wait_time, e
+                    )
                     time.sleep(wait_time)
-                else:
-                    logger.error(f"API request failed after {max_retries} attempts: {e}")
-                    raise
+                    continue
+
+                logger.error("Batch API request failed after %s attempts: %s", max_retries, e)
+                raise
 
     def get_vector_size(self) -> int:
-        """Get vector size for the model
-
-        Returns the vector dimension size for known models.
-        For unknown models, raises ValueError with instructions.
-        """
-        # Lookup table for common models
+        """Get vector size for the model."""
         sizes = {
             # DeepInfra models
             "Qwen/Qwen3-Embedding-8B": 4096,
@@ -88,11 +110,11 @@ class Embedder:
 
         if self.model_name in sizes:
             return sizes[self.model_name]
-        else:
-            raise ValueError(
-                f"Unknown model '{self.model_name}'. Vector size not in lookup table.\n"
-                f"Please specify the vector size manually when creating your collection.\n"
-                f"You can find model dimensions in the provider's documentation:\n"
-                f"  - DeepInfra: https://deepinfra.com/models/embeddings\n"
-                f"  - OpenAI: https://platform.openai.com/docs/guides/embeddings"
-            )
+
+        raise ValueError(
+            f"Unknown model '{self.model_name}'. Vector size not in lookup table.\n"
+            "Please specify the vector size manually when creating your collection.\n"
+            "You can find model dimensions in the provider's documentation:\n"
+            "  - DeepInfra: https://deepinfra.com/models/embeddings\n"
+            "  - OpenAI: https://platform.openai.com/docs/guides/embeddings"
+        )

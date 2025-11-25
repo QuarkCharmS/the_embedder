@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-RAG in AWS - Command Line Interface
+Main CLI interface using argparse for RAG operations.
 
-A CLI tool for ingesting documents, repositories, and archives into Qdrant vector database
-with automatic chunking and embedding generation.
+Commands: upload, collection, sync
+See ARCHITECTURE.md for detailed flow and logic.
 """
 
 import argparse
@@ -11,6 +11,7 @@ import os
 import sys
 from typing import Optional
 from pathlib import Path
+from tqdm import tqdm
 
 # Load .env file if it exists
 try:
@@ -299,8 +300,8 @@ Docker Usage:
         """Handle upload command."""
         debug_level = self._get_debug_level(args)
 
-        print(f"Uploading {args.source_type} to collection '{args.collection}'...")
-        print(f"Qdrant: {args.qdrant_host}:{args.qdrant_port}")
+        tqdm.write(f"Uploading {args.source_type} to collection '{args.collection}'...")
+        tqdm.write(f"Qdrant: {args.qdrant_host}:{args.qdrant_port}")
 
         try:
             # Check if collection exists BEFORE doing any expensive operations
@@ -314,15 +315,15 @@ Docker Usage:
             # Get embedding model from collection metadata
             try:
                 embedding_model = manager.get_collection_embedding_model(args.collection)
-                print(f"Embedding Model: {embedding_model}")
+                tqdm.write(f"Embedding Model: {embedding_model}")
             except ValueError as e:
-                print(f"\nERROR: Collection '{args.collection}' has no embedding_model metadata.", file=sys.stderr)
+                tqdm.write(f"\nERROR: Collection '{args.collection}' has no embedding_model metadata.", file=sys.stderr)
                 print(f"This collection was likely created before embedding model metadata was required.", file=sys.stderr)
                 print(f"Please recreate the collection with:", file=sys.stderr)
                 print(f"  python -m app.cli collections create {args.collection} --vector-size <size> --embedding-model <model>", file=sys.stderr)
                 return 1
             if args.debug:
-                print(f"Debug: Enabled")
+                tqdm.write("Debug: Enabled")
             if args.source_type == 'file':
                 file_path = Path(args.path).resolve()
                 if not file_path.exists():
@@ -335,9 +336,11 @@ Docker Usage:
                     embedding_model=embedding_model,
                     api_token=args.api_token,
                     relative_path=file_path.name,
-                    debug_level=debug_level
+                    debug_level=debug_level,
+                    qdrant_host=args.qdrant_host,
+                    qdrant_port=args.qdrant_port
                 )
-                print(f"\n✓ Successfully uploaded file: {file_path.name}")
+                tqdm.write(f"\n✓ Successfully uploaded file: {file_path.name}")
 
             elif args.source_type == 'repo':
                 handler = RepoHandler()
@@ -347,9 +350,11 @@ Docker Usage:
                     embedding_model=embedding_model,
                     api_token=args.api_token,
                     debug_level=debug_level,
-                    git_token=args.git_token
+                    git_token=args.git_token,
+                    qdrant_host=args.qdrant_host,
+                    qdrant_port=args.qdrant_port
                 )
-                print(f"\n✓ Successfully uploaded repository: {args.url}")
+                tqdm.write(f"\n✓ Successfully uploaded repository: {args.url}")
 
             elif args.source_type == 'archive':
                 archive_path = Path(args.path).resolve()
@@ -363,9 +368,11 @@ Docker Usage:
                     collection_name=args.collection,
                     embedding_model=embedding_model,
                     api_token=args.api_token,
-                    debug_level=debug_level
+                    debug_level=debug_level,
+                    qdrant_host=args.qdrant_host,
+                    qdrant_port=args.qdrant_port
                 )
-                print(f"\n✓ Successfully uploaded archive: {archive_path.name}")
+                tqdm.write(f"\n✓ Successfully uploaded archive: {archive_path.name}")
 
             return 0
 
