@@ -10,12 +10,12 @@ Complete guide for running the RAG CLI Docker container with environment variabl
 
 ```bash
 cd /home/santiago/rag_in_aws_the_big_project
-docker build -f rag_in_aws/Dockerfile -t rag-cli:latest .
+docker build -f rag_embedder/Dockerfile -t rag-cli:latest .
 ```
 
 Tag for registry:
 ```bash
-docker build -f rag_in_aws/Dockerfile -t your-registry/rag-cli:v1.0.0 .
+docker build -f rag_embedder/Dockerfile -t your-registry/rag-cli:v1.0.0 .
 ```
 
 ---
@@ -195,7 +195,7 @@ services:
   rag-cli:
     build:
       context: ..
-      dockerfile: rag_in_aws/Dockerfile
+      dockerfile: rag_embedder/Dockerfile
     environment:
       - QDRANT_HOST=qdrant
       - MODEL_NAME=${MODEL_NAME}
@@ -436,7 +436,7 @@ REPO_URL="git@github.com:company/docs.git"
 
 # Build image
 cd /home/santiago/rag_in_aws_the_big_project
-docker build -f rag_in_aws/Dockerfile -t ${REGISTRY}/rag-cli:${IMAGE_TAG} .
+docker build -f rag_embedder/Dockerfile -t ${REGISTRY}/rag-cli:${IMAGE_TAG} .
 
 # Push to registry (if needed)
 docker push ${REGISTRY}/rag-cli:${IMAGE_TAG}

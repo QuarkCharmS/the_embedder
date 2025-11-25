@@ -4,7 +4,7 @@ FROM python:3.12-slim AS builder
 WORKDIR /build
 
 # Copy and install the_chunker package
-# NOTE: Build from parent directory: docker build -f rag_in_aws/Dockerfile -t rag-cli .
+# NOTE: Build from parent directory: docker build -f rag_embedder/Dockerfile -t rag-cli .
 COPY the_chunker ./the_chunker
 RUN pip install --no-cache-dir ./the_chunker
 

@@ -769,7 +769,7 @@ The logical next steps would be:
 ### Import Errors in Tests
 - **Check**: Parent directory added to sys.path? (Line 26 in test files)
 - **Check**: Running from correct directory?
-- **Solution**: `cd /path/to/rag_in_aws && python tests/test_quick.py`
+- **Solution**: `cd /path/to/rag_embedder && python tests/test_quick.py`
 
 ### Tests Get Stuck
 - **Check**: Qdrant running? `docker ps | grep qdrant`

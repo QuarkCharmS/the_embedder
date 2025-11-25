@@ -425,7 +425,7 @@ Located in `test-files/`:
 ## File Structure
 
 ```
-rag_in_aws/
+rag_embedder/
 ├── handlers.py              # FileHandler, RepoHandler, ArchiveHandler
 ├── git_utils.py             # Smart git cloning with auto-detection ⭐
 ├── qdrant_manager.py        # Qdrant operations & sync logic
@@ -464,7 +464,7 @@ docker run -p 6333:6333 qdrant/qdrant
 
 ```bash
 pip install -r requirements.txt
-cd ../the_chunker && pip install -e . && cd ../rag_in_aws
+cd ../the_chunker && pip install -e . && cd ../rag_embedder
 ```
 
 ### 3. Set API Token

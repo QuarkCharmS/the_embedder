@@ -29,8 +29,8 @@ A powerful CLI tool for ingesting documents, code repositories, and archives int
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/rag_in_aws.git
-cd rag_in_aws
+git clone https://github.com/yourusername/rag_embedder.git
+cd rag_embedder
 
 # Install dependencies
 pip install -r requirements.txt
@@ -44,8 +44,8 @@ cp .env.example .env
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/rag_in_aws.git
-cd rag_in_aws
+git clone https://github.com/yourusername/rag_embedder.git
+cd rag_embedder
 
 # Set up environment variables
 cp .env.example .env
@@ -366,7 +366,7 @@ Solution:
 ### Project Structure
 
 ```
-rag_in_aws/
+rag_embedder/
 ├── app/
 │   ├── __init__.py
 │   ├── __main__.py          # Entry point for python -m app
