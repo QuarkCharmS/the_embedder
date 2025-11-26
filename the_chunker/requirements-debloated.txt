@@ -1,0 +1,15 @@
+
+tree_sitter==0.20.4
+tree_sitter_languages==1.10.2
+chonkie
+unstructured
+chardet>=5.0.0
+PyPDF2>=3.0.0
+python-docx>=0.8.11
+odfpy>=1.4.1
+openpyxl>=3.0.9
+python-pptx>=0.6.21
+striprtf>=0.0.26
+beautifulsoup4>=4.11.0
+markdown>=3.4.0
+tiktoken==0.12.0
