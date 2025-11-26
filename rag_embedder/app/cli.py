@@ -202,9 +202,10 @@ Docker Usage:
         delete_parser = subparsers.add_parser('delete', help='Delete a collection')
         delete_parser.add_argument('name', help='Collection name')
         delete_parser.add_argument(
-            '--force',
+            '-y', '--yes',
             action='store_true',
-            help='Skip confirmation prompt'
+            dest='yes',
+            help='Automatically confirm deletion without prompting'
         )
 
         # Info collection
@@ -428,8 +429,8 @@ Docker Usage:
                     print(f"ERROR: Collection '{args.name}' does not exist.", file=sys.stderr)
                     return 1
 
-                # Confirm deletion unless --force
-                if not args.force:
+                # Confirm deletion unless -y/--yes
+                if not args.yes:
                     response = input(f"Are you sure you want to delete collection '{args.name}'? [y/N] ")
                     if response.lower() not in ('y', 'yes'):
                         print("Deletion cancelled.")

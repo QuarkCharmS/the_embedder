@@ -1,48 +1,54 @@
-# Builder stage: install the_chunker
+# Stage 1: Builder - Install the_chunker and all dependencies
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy and install the_chunker package
-# NOTE: Build from parent directory: docker build -f rag_embedder/Dockerfile -t rag-cli .
+# NOTE: Build from parent directory: docker build -f rag_embedder/Dockerfile -t rag-embedder .
 COPY the_chunker ./the_chunker
+
+# Install the_chunker requirements first
+RUN pip install --no-cache-dir -r ./the_chunker/requirements.txt
+
+# Install the_chunker package itself
 RUN pip install --no-cache-dir ./the_chunker
 
-# Final stage
+# Copy and install rag_embedder requirements
+COPY rag_embedder/requirements.txt ./rag_embedder_requirements.txt
+RUN pip install --no-cache-dir -r ./rag_embedder_requirements.txt
+
+# Stage 2: Runtime - Lightweight image with only installed packages and app code
 FROM python:3.12-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install runtime system dependencies (git for repo cloning, openssh for private repos)
 RUN apt-get update && apt-get install -y \
     git \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Create .ssh directory for SSH keys (if needed)
+# Create .ssh directory for SSH keys (if needed for private repos)
 RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
-# Copy requirements first for better layer caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy only the installed the_chunker package from builder stage
-COPY --from=builder /usr/local/lib/python3.12/site-packages/the_chunker /usr/local/lib/python3.12/site-packages/the_chunker
+# Copy all installed Python packages from builder stage
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 
 # Copy application code
-COPY app/ ./app/
-
-# Make CLI executable
-RUN chmod +x app/cli.py
+COPY rag_embedder/app ./app
 
 # Set Python path
 ENV PYTHONPATH=/app
 
-# Set entrypoint to run the CLI
-ENTRYPOINT ["python", "-m", "app.cli"]
+# Set entrypoint to worker.py for command execution
+# This allows: docker run rag-embedder upload_repo <repo_url> <collection>
+ENTRYPOINT ["python", "-m", "app.worker"]
 
 # Default command shows help
-CMD ["--help"]
+CMD []

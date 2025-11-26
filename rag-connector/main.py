@@ -27,19 +27,43 @@ class SearchRequest(BaseModel):
 async def get_embedding(text: str, api_key: str) -> list[float]:
     """Get embedding from DeepInfra API"""
     logger.info(f"Getting embedding for text: {text[:50]}...")
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.deepinfra.com/v1/openai/embeddings",
-            json={"model": "Qwen/Qwen3-Embedding-8B", "input": text},
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=30.0
+    try:
+        timeout = httpx.Timeout(
+            connect=10.0,   # time to establish TCP connection
+            read=120.0,     # how long you're willing to wait for the model to respond
+            write=30.0,
+            pool=30.0,
         )
-        if response.status_code == 401:
-            logger.error("Invalid DeepInfra API key")
-            raise HTTPException(401, "Invalid API key")
-        response.raise_for_status()
-        logger.info("Embedding retrieved successfully")
-        return response.json()["data"][0]["embedding"]
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.deepinfra.com/v1/openai/embeddings",
+                json={"model": "Qwen/Qwen3-Embedding-8B", "input": text},
+                headers={"Authorization": f"Bearer {api_key}"}
+            )
+            if response.status_code == 401:
+                logger.error("Invalid DeepInfra API key")
+                raise HTTPException(401, "Invalid API key")
+
+            response.raise_for_status()
+
+            # Parse response and extract embedding
+            response_data = response.json()
+            logger.info("Embedding retrieved successfully")
+            return response_data["data"][0]["embedding"]
+    except HTTPException:
+        raise
+    except httpx.HTTPStatusError as e:
+        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        logger.error(f"Embedding API error: {error_msg}")
+        raise HTTPException(500, f"Embedding API error: {error_msg}")
+    except (KeyError, IndexError) as e:
+        error_msg = f"Unexpected response format: {e}. Response: {response.text[:500]}"
+        logger.error(f"Embedding response parsing error: {error_msg}")
+        raise HTTPException(500, f"Embedding response error: {error_msg}")
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)}"
+        logger.error(f"Embedding error: {error_msg}")
+        raise HTTPException(500, f"Embedding error: {error_msg}")
 
 async def decide_intent(query: str, api_key: str) -> str:
     """Decide if query is for code or explanation"""
