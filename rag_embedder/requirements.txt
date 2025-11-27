@@ -30,10 +30,7 @@ markdown>=3.4.0
 
 
 # New requirements for embedding and vector database
-sentence-transformers>=2.7.0
 qdrant-client>=1.7.0
-torch
-transformers>=4.51.0
 
 # Environment variable management
 python-dotenv>=1.0.0

@@ -91,6 +91,54 @@ class Embedder:
                 logger.error("Batch API request failed after %s attempts: %s", max_retries, e)
                 raise
 
+    def validate_model_exists(self) -> tuple[bool, str]:
+        """
+        Validate that the embedding model exists and is accessible.
+
+        Makes a test API call with minimal text to check if the model is available.
+
+        Returns:
+            tuple[bool, str]: (is_valid, error_message)
+                - (True, "") if model exists and is accessible
+                - (False, error_message) if model doesn't exist or isn't accessible
+        """
+        try:
+            # Make a minimal test embedding request
+            test_text = "test"
+            _ = self.get_embeddings_batch([test_text])
+            return (True, "")
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                provider = "DeepInfra" if "/" in self.model_name else "OpenAI"
+                return (False,
+                    f"Model '{self.model_name}' not found on {provider}.\n"
+                    f"Please check the model name and ensure it exists on the provider's API.\n"
+                    f"Available models:\n"
+                    f"  - DeepInfra: https://deepinfra.com/models/embeddings\n"
+                    f"  - OpenAI: https://platform.openai.com/docs/guides/embeddings"
+                )
+            elif e.response.status_code == 401:
+                return (False,
+                    f"Authentication failed for model '{self.model_name}'.\n"
+                    f"Please check your API token is valid.\n"
+                    f"Set it with: export API_TOKEN=your_token_here"
+                )
+            elif e.response.status_code == 403:
+                return (False,
+                    f"Access forbidden for model '{self.model_name}'.\n"
+                    f"This model may be private or require special access.\n"
+                    f"Please check your API token permissions."
+                )
+            else:
+                return (False, f"HTTP error {e.response.status_code}: {str(e)}")
+
+        except requests.exceptions.RequestException as e:
+            return (False, f"Network error while validating model: {str(e)}")
+
+        except Exception as e:
+            return (False, f"Unexpected error while validating model: {str(e)}")
+
     def get_vector_size(self) -> int:
         """Get vector size for the model."""
         sizes = {
