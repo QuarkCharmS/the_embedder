@@ -130,73 +130,47 @@ These thresholds live in `the_chunker/chunking/chunker_config.py`. Adjust to fit
 
 ## 🔢 Tokenization & Models
 
-`tokenizer.py` resolves a tokenizer based on `model_name`:
+`the_chunker` uses a **smart tokenization system** with automatic fallbacks:
 
-- Works with **Hugging Face** tokenizer identifiers (e.g., `"Qwen/Qwen3-Embedding-8B"`, `"meta-llama/Llama-3-70b-hf"`).
-- Works with **OpenAI models** (e.g., `"gpt-4"`, `"text-embedding-3-large"`) using `tiktoken`.
-- You can add aliases or custom logic in `chunker_config.py` to map model names → tokenizer names.
+- ✅ **OpenAI models** (e.g., `gpt-4`, `text-embedding-3-small`) → Uses `tiktoken` (fast, lightweight)
+- ✅ **HuggingFace models** (e.g., `Qwen/Qwen3-Embedding-8B`, `BAAI/bge-large-en-v1.5`) → Downloads lightweight tokenizer files
+- ✅ **Unknown/unavailable models** → Automatic fallback to `tiktoken` with warnings (approximate counts)
+- ✅ **Custom tokenizers** → Optional transformers fallback (requires heavy dependencies)
 
 > **Counting only**: The `model_name` is used to choose a tokenizer for **token counting**, not to call a remote API. Bring‑your‑own embedding/generation stack separately.
 
-### Lightweight Tokenizer System
+### Quick Start
 
-**NEW:** `the_chunker` now uses a **lightweight tokenizer fetching system** that avoids the heavy `transformers` and `torch` dependencies.
+```python
+from the_chunker.chunking.tokenizer import count_tokens
 
-#### How it works
-
-1. **For OpenAI models** (gpt-4, text-embedding-*, etc.):
-   - Uses `tiktoken` for fast, accurate token counting
-   - No external downloads required
-
-2. **For HuggingFace models** (Qwen, LLaMA, BERT, etc.):
-   - Downloads only the minimal tokenizer files from HuggingFace Hub
-   - Uses lightweight libraries:
-     - `tokenizers` for BPE/WordPiece tokenizers
-     - `sentencepiece` for SentencePiece tokenizers (LLaMA, T5, etc.)
-   - Caches tokenizer files locally using HuggingFace's standard cache
-
-#### Cache Location
-
-Tokenizer files are cached automatically by `huggingface_hub` at:
-```
-~/.cache/huggingface/hub/
+# Just works - no configuration needed!
+count = count_tokens("Hello world", "text-embedding-3-small")
+count = count_tokens("Hello world", "Qwen/Qwen3-Embedding-8B")
 ```
 
-This is the standard HuggingFace cache location used by all HuggingFace tools.
+**First use**: Downloads & caches tokenizer files (~2-10 sec)
+**Subsequent uses**: Instant (<1 sec) via cache
 
-To use a custom cache directory:
-```bash
-export HF_HOME=/path/to/custom/cache
-# or
-export HUGGINGFACE_HUB_CACHE=/path/to/custom/cache
-```
+### Caching
 
-#### Transformers Fallback (Optional)
+Tokenizer files are cached automatically:
+- **Location**: `~/.cache/huggingface/hub/`
+- **Lifetime**: Permanent (until manually cleared)
+- **Benefit**: No re-download after restart
 
-If you need full `transformers` library support (e.g., for custom tokenizers with `trust_remote_code`), you can:
+### Advanced Configuration
 
-1. Install the optional transformers dependencies:
-   ```bash
-   pip install -e ".[transformers]"
-   # or
-   pip install -e ".[all]"
-   ```
+For private models, custom tokenizers, or advanced usage, see the comprehensive guide:
 
-2. Enable the fallback via environment variable:
-   ```bash
-   export USE_TRANSFORMERS_FALLBACK=1
-   ```
+📖 **[TOKENIZER_STRATEGY.md](./TOKENIZER_STRATEGY.md)** - Complete tokenization guide
 
-The system will first try lightweight loading, then fall back to `transformers.AutoTokenizer` if needed.
-
-#### Private Models
-
-For private HuggingFace models, set your token:
-```bash
-export HF_TOKEN=your_huggingface_token
-# or
-export HUGGING_FACE_HUB_TOKEN=your_huggingface_token
-```
+Covers:
+- Default behavior and fallback strategies
+- How to use private HuggingFace models (`HF_TOKEN`)
+- How to enable heavy transformers fallback (`USE_TRANSFORMERS_FALLBACK`)
+- Environment variables and configuration
+- Troubleshooting and performance tuning
 
 ---
 
