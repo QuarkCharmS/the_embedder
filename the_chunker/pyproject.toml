@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "the-chunker"
+version = "0.1.0"
+description = "A standalone chunking engine that turns source code and other text files into semantically meaningful, token‑aware chunks. It supports AST‑based chunking via Tree‑sitter and robust fallbacks for everything else, plus optional overlap merging tuned for embedding models."
+authors = [{name = "Santiago Velazquez"}]
+requires-python = ">=3.12"
+dependencies = [
+    # Core chunking and parsing
+    "tree_sitter==0.20.4",
+    "tree_sitter_languages==1.10.2",
+    "chonkie",
+    "unstructured",
+    "chardet>=5.0.0",
+    "PyPDF2>=3.0.0",
+    "python-docx>=0.8.11",
+    "odfpy>=1.4.1",
+    "openpyxl>=3.0.9",
+    "python-pptx>=0.6.21",
+    "striprtf>=0.0.26",
+    "beautifulsoup4>=4.11.0",
+    "markdown>=3.4.0",
+    # Tokenization - lightweight dependencies
+    "tiktoken==0.12.0",          # For OpenAI models
+    "huggingface_hub>=0.20.0",   # For downloading tokenizer files
+    "tokenizers>=0.15.0",        # For BPE/WordPiece tokenizers
+    "sentencepiece>=0.1.99",     # For SentencePiece tokenizers (LLaMA, T5, etc.)
+]
+
+[project.optional-dependencies]
+# Heavy dependencies for transformers fallback (only install if needed)
+transformers = [
+    "torch",
+    "transformers==4.51.0",
+]
+# Install all optional dependencies
+all = [
+    "torch",
+    "transformers==4.51.0",
+]
+
+[project.urls]
+Repository = "https://github.com/QuarkCharmS/the_chunker"

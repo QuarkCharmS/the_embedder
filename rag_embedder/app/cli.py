@@ -56,7 +56,8 @@ Embedding Models:
     - And many more...
 
 Examples:
-  # Create a collection with an embedding model
+  # Create a collection with an embedding model (validates model exists)
+  export API_TOKEN=your_api_key
   rag-cli collections create my_collection --vector-size 4096 --embedding-model "Qwen/Qwen3-Embedding-8B"
 
   # Upload a repository (uses embedding model from collection metadata)
@@ -78,11 +79,18 @@ Examples:
   rag-cli collections info my_collection
 
 Note:
+  Collection creation validates the embedding model:
+  - Makes a test API call to ensure the model exists and is accessible
+  - Prevents creating collections with non-existent models
+  - Requires API_TOKEN to be set for validation
+  - Works with both DeepInfra and OpenAI models
+
   Upload is smart and incremental:
   - Only uploads new/changed files (hash comparison)
   - Skips unchanged files (no unnecessary API calls)
   - For repos: Automatically deletes chunks for removed files
   - Embedding model is automatically fetched from collection metadata
+  - Auto-splits oversized chunks (>8192 tokens) before embedding
 
 Docker Usage:
   # Build the image
@@ -405,6 +413,26 @@ Docker Usage:
                 if manager.collection_exists(args.name):
                     print(f"ERROR: Collection '{args.name}' already exists.", file=sys.stderr)
                     return 1
+
+                # Check if API token is available
+                if not args.api_token:
+                    print("ERROR: API token is required to validate embedding model.", file=sys.stderr)
+                    print("\nSet the API_TOKEN environment variable or use --api-token argument.", file=sys.stderr)
+                    return 1
+
+                # Validate embedding model exists
+                print(f"Validating embedding model '{args.embedding_model}'...")
+                from app.embedder import Embedder
+                embedder = Embedder(model_name=args.embedding_model, api_token=args.api_token)
+                is_valid, error_msg = embedder.validate_model_exists()
+
+                if not is_valid:
+                    print(f"\nERROR: Embedding model validation failed.", file=sys.stderr)
+                    print(error_msg, file=sys.stderr)
+                    print("\nCollection was NOT created.", file=sys.stderr)
+                    return 1
+
+                print(f"✓ Model '{args.embedding_model}' validated successfully")
 
                 # Map distance string to Distance enum
                 distance_map = {

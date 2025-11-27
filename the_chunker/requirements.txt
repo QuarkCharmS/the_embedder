@@ -1,0 +1,25 @@
+# Core dependencies
+tree_sitter==0.20.4
+tree_sitter_languages==1.10.2
+chonkie
+unstructured
+chardet>=5.0.0
+PyPDF2>=3.0.0
+python-docx>=0.8.11
+odfpy>=1.4.1
+openpyxl>=3.0.9
+python-pptx>=0.6.21
+striprtf>=0.0.26
+beautifulsoup4>=4.11.0
+markdown>=3.4.0
+
+# Tokenization - lightweight dependencies
+tiktoken==0.12.0          # For OpenAI models
+huggingface_hub>=0.20.0   # For downloading tokenizer files
+tokenizers>=0.15.0        # For BPE/WordPiece tokenizers
+sentencepiece>=0.1.99     # For SentencePiece tokenizers (LLaMA, T5, etc.)
+
+# Optional: Heavy dependencies (only needed if USE_TRANSFORMERS_FALLBACK=1)
+# Uncomment these if you need full transformers support:
+# torch
+# transformers==4.51.0

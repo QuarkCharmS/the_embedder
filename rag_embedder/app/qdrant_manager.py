@@ -20,9 +20,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct, CollectionInfo
 from tqdm import tqdm
 from app.embedder import Embedder
-from app.qdrant_chunker import file_to_qdrant_chunks
+from app.qdrant_chunker import file_to_qdrant_chunks, QdrantChunk
 from app.git_utils import smart_git_clone, get_repo_name_from_url, GitCloneError
 from app.logger import get_logger
+from the_chunker.chunking.tokenizer import count_tokens
 
 logger = get_logger(__name__)
 
@@ -173,6 +174,9 @@ class QdrantManager:
                 "Please create it first using create_collection()."
             )
 
+        # Get embedding model from collection metadata for token counting
+        embedding_model = self.get_collection_embedding_model(collection_name)
+
         embed_batch_size = 10  # Batch size for embedding API calls
         upload_batch_size = 100  # Upload every 100 points (reduced to avoid timeouts)
         points = []
@@ -189,7 +193,51 @@ class QdrantManager:
                 batch_texts = [chunk.get_content() for chunk in batch_chunks]
 
                 try:
-                    # Step 1: Get embeddings for this batch (API call with 10 texts)
+                    # Step 1: Validate and auto-split oversized chunks
+                    MAX_TOKENS = 8192  # Conservative limit for most embedding models
+                    validated_chunks = []
+                    validated_texts = []
+
+                    for chunk, text in zip(batch_chunks, batch_texts):
+                        try:
+                            token_count = count_tokens(text, embedding_model)
+
+                            if token_count > MAX_TOKENS:
+                                # Chunk is too large - split it
+                                tqdm.write(f"[WARNING] Chunk {chunk.chunk_index} ({token_count} tokens) exceeds limit ({MAX_TOKENS}). Auto-splitting...")
+
+                                # Simple split: divide text into smaller pieces
+                                # Estimate words per token: ~0.75
+                                words = text.split()
+                                target_words = int(MAX_TOKENS * 0.75)
+
+                                for sub_idx, start in enumerate(range(0, len(words), target_words)):
+                                    sub_text = ' '.join(words[start:start + target_words])
+                                    sub_chunk = QdrantChunk(
+                                        file_path=chunk.file_path,
+                                        chunk_content=sub_text,
+                                        chunk_index=f"{chunk.chunk_index}.{sub_idx}",
+                                        embedding_model=embedding_model,
+                                        relative_path=chunk.relative_path,
+                                        file_hash=chunk._file_hash
+                                    )
+                                    validated_chunks.append(sub_chunk)
+                                    validated_texts.append(sub_text)
+                                    tqdm.write(f"[INFO] Created sub-chunk {chunk.chunk_index}.{sub_idx} ({len(sub_text.split())} words)")
+                            else:
+                                validated_chunks.append(chunk)
+                                validated_texts.append(text)
+                        except Exception as token_error:
+                            # If token counting fails, use tiktoken fallback (which should always work)
+                            logger.warning(f"Token counting failed for chunk {chunk.chunk_index}: {token_error}. Using chunk as-is.")
+                            validated_chunks.append(chunk)
+                            validated_texts.append(text)
+
+                    # Replace original batch with validated/split chunks
+                    batch_chunks = validated_chunks
+                    batch_texts = validated_texts
+
+                    # Step 2: Get embeddings for this batch (API call with texts)
                     logger.debug("Embedding batch %s/%s (%s chunks)", i//embed_batch_size + 1, (total_chunks + embed_batch_size - 1)//embed_batch_size, len(batch_texts))
                     batch_embeddings = embedder.get_embeddings_batch(batch_texts)
                     logger.debug("Embeddings received, creating %s points", len(batch_embeddings))
