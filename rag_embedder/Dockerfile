@@ -13,10 +13,7 @@ RUN apt-get update && apt-get install -y \
 # NOTE: Build from parent directory: docker build -f rag_embedder/Dockerfile -t rag-embedder .
 COPY the_chunker ./the_chunker
 
-# Install the_chunker requirements first
-RUN pip install --no-cache-dir -r ./the_chunker/requirements.txt
-
-# Install the_chunker package itself
+# Install the_chunker with lightweight dependencies (no transformers/torch)
 RUN pip install --no-cache-dir ./the_chunker
 
 # Copy and install rag_embedder requirements
@@ -46,9 +43,9 @@ COPY rag_embedder/app ./app
 # Set Python path
 ENV PYTHONPATH=/app
 
-# Set entrypoint to worker.py for command execution
-# This allows: docker run rag-embedder upload_repo <repo_url> <collection>
-ENTRYPOINT ["python", "-m", "app.worker"]
+# Set entrypoint to cli.py for command execution
+# This allows: docker run rag-embedder collections create my_collection --vector-size 1536 --embedding-model text-embedding-3-small
+ENTRYPOINT ["python", "-m", "app.cli"]
 
 # Default command shows help
-CMD []
+CMD ["--help"]
