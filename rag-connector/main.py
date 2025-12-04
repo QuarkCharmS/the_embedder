@@ -175,6 +175,6 @@ async def search(request: SearchRequest):
 
     return {"response": response}
 
-@app.get("/")
+@app.get("/health")
 def health():
     return {"status": "ok"}

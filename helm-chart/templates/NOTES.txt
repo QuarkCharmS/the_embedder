@@ -1,0 +1,117 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     RAG System Successfully Deployed!                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Your RAG system has been installed with the following components:
+
+{{- $openWebui := index .Values "open-webui" }}
+{{- if $openWebui.enabled }}
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🌐  OPEN WEBUI                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+{{- if $openWebui.ingress.enabled }}
+  Access URL: http{{ if $openWebui.ingress.tls }}s{{ end }}://{{ $openWebui.ingress.host }}
+{{- else }}
+  1. Port-forward to access locally:
+     kubectl port-forward svc/{{ .Release.Name }}-open-webui 3000:{{ $openWebui.service.port }}
+
+  2. Open your browser:
+     http://localhost:3000
+{{- end }}
+{{- end }}
+
+{{- if $openWebui.pipelines.enabled }}
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🔄  PIPELINES                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+  Service: {{ .Release.Name }}-open-webui-pipelines:9099
+  Status:  kubectl get pods -l app.kubernetes.io/component=pipelines
+
+  API Key: Check values.yaml for PIPELINES_API_KEY
+{{- end }}
+
+{{ if .Values.ragConnector.enabled }}
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 🔌  RAG CONNECTOR                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+  Service: {{ include "rag-system.ragConnector.fullname" . }}:{{ .Values.ragConnector.service.port }}
+  Replicas: {{ .Values.ragConnector.replicaCount }}
+
+  Connected to Qdrant: {{ include "rag-system.qdrantUrl" . }}
+
+  Check status:
+    kubectl get pods -l app.kubernetes.io/component=rag-connector
+    kubectl logs -l app.kubernetes.io/component=rag-connector --tail=50
+{{- end }}
+
+{{ if .Values.qdrant.enabled }}
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 💾  QDRANT VECTOR DATABASE                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+  Service: {{ include "rag-system.qdrant.serviceName" . }}:6333 (HTTP)
+           {{ include "rag-system.qdrant.serviceName" . }}:6334 (gRPC)
+
+  Replicas: {{ .Values.qdrant.replicaCount }}
+  {{- if .Values.qdrant.config.cluster.enabled }}
+  Clustering: ENABLED (Distributed cluster)
+  {{- else }}
+  Clustering: DISABLED (Single instance)
+  {{- end }}
+
+  Storage: {{ .Values.qdrant.persistence.size }}
+
+  Access Qdrant dashboard:
+    kubectl port-forward svc/{{ include "rag-system.qdrant.serviceName" . }} 6333:6333
+    http://localhost:6333/dashboard
+
+  Check cluster status:
+    kubectl get pods -l app.kubernetes.io/name=qdrant
+    kubectl logs -l app.kubernetes.io/name=qdrant --tail=50
+{{- end }}
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          USEFUL COMMANDS                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  View all resources:
+    kubectl get all -l app.kubernetes.io/instance={{ .Release.Name }}
+
+  View persistent volumes:
+    kubectl get pvc -l app.kubernetes.io/instance={{ .Release.Name }}
+
+  Check logs for all components:
+    kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} --all-containers --tail=100
+
+  Upgrade the release:
+    helm upgrade {{ .Release.Name }} ./helm-chart -f custom-values.yaml
+
+  Uninstall:
+    helm uninstall {{ .Release.Name }}
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                          TROUBLESHOOTING                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  If pods are not starting:
+    kubectl describe pod -l app.kubernetes.io/instance={{ .Release.Name }}
+
+  Check events:
+    kubectl get events --sort-by=.metadata.creationTimestamp
+
+  Verify persistent volumes are bound:
+    kubectl get pvc
+
+  Check resource constraints:
+    kubectl top pods
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                     Need Help? Documentation Links                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+  Qdrant: https://qdrant.tech/documentation/
+  OpenWebUI: https://docs.openwebui.com/
+  Pipelines: https://github.com/open-webui/pipelines
+
+  Chart values: helm show values ./helm-chart
+
+Happy RAG-ing! 🚀

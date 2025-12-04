@@ -1,0 +1,80 @@
+{{- if .Values.ragConnector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rag-system.ragConnector.fullname" . }}
+  labels:
+    {{- include "rag-system.ragConnector.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.ragConnector.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "rag-system.ragConnector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/rag-connector-configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "rag-system.ragConnector.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.ragConnector.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ragConnector.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.ragConnector.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: rag-connector
+        image: "{{ .Values.ragConnector.image.repository }}:{{ .Values.ragConnector.image.tag }}"
+        imagePullPolicy: {{ .Values.ragConnector.image.pullPolicy }}
+        securityContext:
+          {{- toYaml .Values.ragConnector.securityContext | nindent 10 }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.ragConnector.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: QDRANT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "rag-system.ragConnector.fullname" . }}
+              key: qdrantUrl
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "rag-system.ragConnector.fullname" . }}
+              key: logLevel
+        {{- if .Values.ragConnector.env.qdrantApiKey }}
+        - name: QDRANT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "rag-system.ragConnector.fullname" . }}
+              key: qdrantApiKey
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.ragConnector.resources | nindent 10 }}
+{{- end }}

@@ -43,7 +43,7 @@ services:
       - rag-network
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.15.5
     container_name: qdrant
     ports:
       - "6333:6333"

@@ -1,0 +1,281 @@
+# Default values for rag-system
+# This chart uses official Helm charts as dependencies for Qdrant and OpenWebUI
+# Only RAG Connector is managed directly by this chart
+
+# =============================================================================
+# RAG Connector (Custom Service - Managed by this chart)
+# =============================================================================
+ragConnector:
+  enabled: true
+  replicaCount: 1  # Stateless service, can scale horizontally
+
+  image:
+    repository: letpoquark/rag-connector
+    tag: v1.1
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+
+  # Environment variables
+  env:
+    # Qdrant connection - uses the dependency chart's service name
+    qdrantUrl: ""  # Auto-configured as: http://<release-name>-qdrant:6333
+    qdrantApiKey: ""  # Optional: set if Qdrant has authentication
+    logLevel: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+  # Optional: Create a ConfigMap for environment variables
+  configMap:
+    create: true
+
+  # Optional: Create a Secret for sensitive data
+  secret:
+    create: false
+    name: ""
+    data: {}
+
+  # Ingress for external access
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: rag-connector.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false
+    allowPrivilegeEscalation: false
+
+# =============================================================================
+# Qdrant (Official Helm Chart - qdrant.github.io/qdrant-helm)
+# Full configuration: https://github.com/qdrant/qdrant-helm
+# =============================================================================
+qdrant:
+  enabled: true
+
+  # Number of Qdrant replicas for HA
+  replicaCount: 2 # Set to 3 for production HA cluster
+
+  # Qdrant image
+  image:
+    repository: qdrant/qdrant
+    tag: v1.15.5
+    pullPolicy: IfNotPresent
+
+  # Clustering configuration
+  config:
+    cluster:
+      enabled: false  # Set to true for multi-replica clustering
+      # Qdrant will form a distributed cluster automatically
+
+  # Persistence for main data
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""  # Use cluster default if empty
+    accessModes:
+      - ReadWriteOnce
+
+  # Snapshot persistence (for backups)
+  snapshotPersistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+
+  # Service configuration
+  service:
+    type: NodePort
+    ports:
+      - name: http
+        port: 6333
+        targetPort: 6333
+        protocol: TCP
+        nodePort: 30001
+      - name: grpc
+        port: 6334
+        targetPort: 6334
+        protocol: TCP
+        nodePort: 30002
+      - name: p2p
+        port: 6335
+        targetPort: 6335
+        protocol: TCP
+        nodePort: 30003
+
+  # Resource limits
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+    requests:
+      cpu: 1000m
+      memory: 2Gi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Ingress for Qdrant dashboard (optional)
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: qdrant.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+# =============================================================================
+# OpenWebUI (Official Helm Chart - helm.openwebui.com)
+# Includes Pipelines as a subchart
+# Full configuration: https://github.com/open-webui/helm-charts
+# =============================================================================
+open-webui:
+  enabled: false
+
+  # OpenWebUI image
+  image:
+    #repository: ghcr.io/open-webui/open-webui
+    repository: localhost:5000/open-webui
+    tag: main
+    pullPolicy: IfNotPresent
+
+  # Replica count
+  replicaCount: 2  # Set to 3 for HA (requires ReadWriteMany storage)
+
+  extraEnvVars:
+    - name: WEBUI_SECRET_KEY
+      value: "***REMOVED_SECRET_KEY***"
+    - name: ENABLE_SIGNUP
+      value: true
+  # Pipelines (automatically managed by OpenWebUI chart)
+  pipelines:
+    enabled: true  # This installs Pipelines as a subchart
+
+    image:
+      #repository: ghcr.io/open-webui/pipelines
+      repository: localhost:5000/pipelines
+      tag: main
+      pullPolicy: IfNotPresent
+
+    # Pipelines environment variables
+    extraEnvVars:
+      - name: PIPELINES_API_KEY
+        value: "***REMOVED_PIPELINES_KEY***"
+
+    # Pipelines persistence
+    persistence:
+      enabled: true
+      size: 2Gi
+      storageClass: ""
+
+    # Pipelines resources
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+  # Ollama (disable if using external LLM)
+  ollama:
+    enabled: false
+
+  # OpenWebUI persistence
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+    accessMode: ReadWriteOnce  # Change to ReadWriteMany for multi-replica
+    # Note: ReadWriteMany requires NFS/EFS/Azure Files storage class
+
+  # Service configuration
+  service:
+    type: NodePort #ClusterIP
+    port: 8080
+    containerPort: 8080
+    nodePort: 30001  # Set if using NodePort
+
+  # Ingress for external access
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+      # cert-manager.io/cluster-issuer: letsencrypt-prod
+      # nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    host: openwebui.local
+    tls: false
+    existingSecret: ""
+
+  # OpenWebUI resources
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Extra environment variables for OpenWebUI
+  extraEnvVars: []
+    # - name: WEBUI_AUTH
+    #   value: "true"
+    # - name: DEFAULT_USER_ROLE
+    #   value: "user"
+
+# =============================================================================
+# Global Settings (Applied to all services)
+# =============================================================================
+global:
+  # Default storage class for all PVCs
+  storageClass: ""
+
+# =============================================================================
+# Optional: Network Policy
+# =============================================================================
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+
+# =============================================================================
+# Pod Security Context (Default for custom resources)
+# =============================================================================
+podSecurityContext:
+  fsGroup: 1000

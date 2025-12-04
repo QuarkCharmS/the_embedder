@@ -1,0 +1,17 @@
+{{- if .Values.ragConnector.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rag-system.ragConnector.fullname" . }}
+  labels:
+    {{- include "rag-system.ragConnector.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.ragConnector.service.type }}
+  ports:
+  - port: {{ .Values.ragConnector.service.port }}
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "rag-system.ragConnector.selectorLabels" . | nindent 4 }}
+{{- end }}

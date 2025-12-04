@@ -1,0 +1,11 @@
+{{- if and .Values.ragConnector.enabled .Values.ragConnector.configMap.create }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rag-system.ragConnector.fullname" . }}
+  labels:
+    {{- include "rag-system.ragConnector.labels" . | nindent 4 }}
+data:
+  qdrantUrl: {{ include "rag-system.qdrantUrl" . | quote }}
+  logLevel: {{ .Values.ragConnector.env.logLevel | quote }}
+{{- end }}
