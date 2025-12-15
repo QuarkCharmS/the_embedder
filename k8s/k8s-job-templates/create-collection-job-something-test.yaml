@@ -1,0 +1,68 @@
+# RAG Embedder - Create Collection Job Template
+#
+# This job creates a new collection in Qdrant with specified parameters.
+# Each run generates a unique job name and auto-deletes after 5 minutes.
+#
+# Usage:
+#   1. Ensure the rag-embedder-env Secret exists (see secret.yaml)
+#   2. Edit the environment variables below with your collection settings
+#   3. Apply: kubectl apply -f create-collection-job.yaml
+#   4. Monitor: kubectl get jobs -w
+#   5. Check logs: kubectl logs job/rag-create-collection-<random-id>
+#
+# The job will automatically be deleted 300 seconds (5 minutes) after completion.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: rag-create-collection-  # Kubernetes will append random suffix
+  namespace: rag-system
+spec:
+  # Delete job 5 minutes after completion (success or failure)
+  ttlSecondsAfterFinished: 300
+
+  # Don't retry on failure
+  backoffLimit: 0
+
+  template:
+    spec:
+      restartPolicy: Never
+
+      # Mount the secret as a volume
+      volumes:
+        - name: env-config
+          secret:
+            secretName: rag-embedder-env
+
+      containers:
+        - name: rag-cli
+          image: letpoquark/rag_embedder:v1.1
+          imagePullPolicy: IfNotPresent
+
+          # Mount the .env file from secret
+          volumeMounts:
+            - name: env-config
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+
+          # Collection-specific parameters (override these as needed)
+          env:
+            - name: COLLECTION_NAME
+              value: "wonderful-secret-test-collection"
+            - name: VECTOR_SIZE
+              value: "4096"
+            - name: EMBEDDING_MODEL
+              value: "Qwen/Qwen3-Embedding-8B"
+
+          command:
+            - "python"
+            - "-m"
+            - "app.cli"
+            - "collections"
+            - "create"
+            - "$(COLLECTION_NAME)"
+            - "--vector-size"
+            - "$(VECTOR_SIZE)"
+            - "--embedding-model"
+            - "$(EMBEDDING_MODEL)"

@@ -53,11 +53,12 @@ The RAG Embedder uses `the_chunker` under the hood, which supports a wide variet
 
 **Short answer:** Not directly, but you can zip them first.
 
-**Long answer:** The system supports three upload methods:
+**Long answer:** The system supports four upload methods:
 
 1. **Individual files** - Upload one file at a time
 2. **Archives** - Upload a `.zip` or `.tar.gz` containing multiple files
 3. **Git repositories** - Upload entire codebases from GitHub/GitLab
+4. **S3 buckets** - Upload directly from AWS S3, MinIO, or S3-compatible storage
 
 To upload a folder:
 ```bash
@@ -159,6 +160,45 @@ docker run --rm \
   rag-embedder upload_archive /data/documents.zip my-docs-collection
 ```
 
+### How do I upload files from S3?
+
+**Direct S3 upload** - No need to download files first:
+
+```bash
+# Basic S3 upload (uses IAM role or environment credentials)
+docker run --rm \
+  --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e API_TOKEN="your-token" \
+  -e QDRANT_HOST="qdrant" \
+  -e AWS_ACCESS_KEY_ID="your-key" \
+  -e AWS_SECRET_ACCESS_KEY="your-secret" \
+  rag-embedder upload s3 my-bucket my-collection
+
+# Upload specific folder only
+docker run --rm \
+  --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e API_TOKEN="your-token" \
+  -e QDRANT_HOST="qdrant" \
+  rag-embedder upload s3 my-bucket my-collection --prefix documentation/
+
+# Custom S3 endpoint (MinIO, DigitalOcean Spaces)
+docker run --rm \
+  --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e API_TOKEN="your-token" \
+  -e QDRANT_HOST="qdrant" \
+  rag-embedder upload s3 my-bucket my-collection \
+    --endpoint https://minio.example.com \
+    --region us-east-1
+```
+
+**Authentication options:**
+- IAM roles (automatic on AWS EC2/ECS/Lambda)
+- Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+- AWS profile (~/.aws/credentials - mount with `-v ~/.aws:/root/.aws:ro`)
+
 ### Can I mix different types of files in one collection?
 
 **Yes!** You can upload code, documentation, PDFs, and other file types into the same collection. The chunker automatically detects file types and processes them appropriately.
@@ -197,6 +237,7 @@ docker run --rm --network rag_network \
 **It depends on what you're uploading:**
 
 - **Git repositories:** ❌ No mounting needed - just provide the URL
+- **S3 buckets:** ❌ No mounting needed - direct download from S3
 - **Local files:** ✅ Yes, must mount them
 - **Local archives:** ✅ Yes, must mount them
 
@@ -460,6 +501,32 @@ docker run --rm --network rag_network \
   rag-embedder upload_archive /data/project.zip my-wip-project
 ```
 
+### Use Case 5: Index files from S3 bucket
+
+```bash
+# Create collection
+docker run --rm --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e QDRANT_HOST="qdrant" \
+  rag-embedder collection_create docs-from-s3 384
+
+# Upload entire bucket
+docker run --rm --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e API_TOKEN="your-token" \
+  -e QDRANT_HOST="qdrant" \
+  -e AWS_ACCESS_KEY_ID="your-key" \
+  -e AWS_SECRET_ACCESS_KEY="your-secret" \
+  rag-embedder upload s3 my-docs-bucket docs-from-s3
+
+# Or upload specific folder only
+docker run --rm --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e API_TOKEN="your-token" \
+  -e QDRANT_HOST="qdrant" \
+  rag-embedder upload s3 my-bucket docs-from-s3 --prefix api-documentation/
+```
+
 ---
 
 ## Troubleshooting
@@ -618,6 +685,15 @@ docker run --rm --network rag_network \
   -e QDRANT_HOST="qdrant" \
   rag-embedder upload_archive /data/archive.zip COLLECTION_NAME
 
+# Upload from S3 bucket
+docker run --rm --network rag_network \
+  -e MODEL_NAME="sentence-transformers/all-MiniLM-L6-v2" \
+  -e API_TOKEN="your-token" \
+  -e QDRANT_HOST="qdrant" \
+  -e AWS_ACCESS_KEY_ID="your-key" \
+  -e AWS_SECRET_ACCESS_KEY="your-secret" \
+  rag-embedder upload s3 BUCKET_NAME COLLECTION_NAME
+
 # List collections
 docker run --rm --network rag_network \
   -e QDRANT_HOST="qdrant" \
@@ -638,6 +714,9 @@ docker run --rm --network rag_network \
 | `QDRANT_HOST` | No | `localhost` | Qdrant server hostname |
 | `QDRANT_PORT` | No | `6333` | Qdrant server port |
 | `GITHUB_TOKEN` | No | - | GitHub personal access token for private repos |
+| `AWS_ACCESS_KEY_ID` | No | - | AWS access key for S3 uploads (or use IAM role) |
+| `AWS_SECRET_ACCESS_KEY` | No | - | AWS secret key for S3 uploads |
+| `AWS_REGION` | No | `us-east-1` | AWS region for S3 |
 
 \* Required for upload operations, not for collection management
 

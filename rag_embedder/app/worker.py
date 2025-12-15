@@ -3,7 +3,7 @@ Container worker entry point for executing RAG operations.
 
 Provides lightweight CLI for Docker/Kubernetes execution without Click dependency.
 
-Operations: upload_repo, upload_file, upload_archive, collection_create, 
+Operations: upload_repo, upload_file, upload_archive, upload_s3, collection_create,
 collection_delete, collection_list
 
 See ARCHITECTURE.md for detailed flow and logic.
@@ -100,6 +100,43 @@ def upload_archive(archive_path: str, collection_name: str):
     print("Archive upload completed successfully")
 
 
+def upload_s3(bucket_name: str, collection_name: str, prefix: str = "",
+              s3_endpoint: str = None):
+    """Execute S3 bucket upload."""
+    from app.handlers import S3Handler
+
+    config = _get_env_config()
+    if not config['embedding_model'] or not config['api_token']:
+        raise ValueError("MODEL_NAME and API_TOKEN environment variables required")
+
+    access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    region = os.getenv("AWS_REGION", "us-east-1")
+
+    print(f"Uploading S3 bucket: {bucket_name}/{prefix}")
+    print(f"Collection: {collection_name}")
+    print(f"Embedding Model: {config['embedding_model']}")
+    print(f"Region: {region}")
+
+    handler = S3Handler()
+    handler.handle(
+        bucket_name=bucket_name,
+        collection_name=collection_name,
+        embedding_model=config['embedding_model'],
+        api_token=config['api_token'],
+        prefix=prefix,
+        s3_endpoint=s3_endpoint,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        aws_region=region,
+        debug_level="NONE",
+        qdrant_host=config['qdrant_host'],
+        qdrant_port=config['qdrant_port']
+    )
+
+    print("S3 bucket upload completed successfully")
+
+
 def collection_create(collection_name: str, dimension: str):
     """Create a collection."""
     from app.qdrant_manager import QdrantManager
@@ -159,6 +196,7 @@ def main():
         print("  upload_repo <repo_url> <collection> [--git-token <token>]")
         print("  upload_file <file_path> <collection>")
         print("  upload_archive <archive_path> <collection>")
+        print("  upload_s3 <bucket> <collection> [--prefix <prefix>] [--endpoint <url>]")
         print("  collection_create <name> <dimension>")
         print("  collection_delete <name>")
         print("  collection_list")
@@ -187,6 +225,26 @@ def main():
             if len(args) < 2:
                 raise ValueError("upload_archive requires: <archive_path> <collection>")
             upload_archive(args[0], args[1])
+
+        elif operation == "upload_s3":
+            if len(args) < 2:
+                raise ValueError("upload_s3 requires: <bucket> <collection> [--prefix <prefix>] [--endpoint <url>]")
+
+            # Parse optional arguments
+            prefix = ""
+            endpoint = None
+
+            if "--prefix" in args:
+                idx = args.index("--prefix")
+                prefix = args[idx + 1]
+                args = [a for i, a in enumerate(args) if i not in [idx, idx + 1]]
+
+            if "--endpoint" in args:
+                idx = args.index("--endpoint")
+                endpoint = args[idx + 1]
+                args = [a for i, a in enumerate(args) if i not in [idx, idx + 1]]
+
+            upload_s3(args[0], args[1], prefix, endpoint)
 
         elif operation == "collection_create":
             if len(args) < 2:

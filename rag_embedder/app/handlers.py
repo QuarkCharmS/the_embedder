@@ -5,6 +5,7 @@ Classes:
 - FileHandler: Upload single file (auto-detects archives)
 - RepoHandler: Clone and upload git repository with smart sync
 - ArchiveHandler: Extract and upload archive contents
+- S3Handler: Download and upload S3 bucket contents
 
 See ARCHITECTURE.md for detailed flow and logic.
 """
@@ -16,8 +17,18 @@ import os
 import hashlib
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed, wait, FIRST_COMPLETED
+from typing import Tuple, Optional
 import pathspec
 from tqdm import tqdm
+
+try:
+    import boto3
+    from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError
+except ImportError:
+    boto3 = None
+    ClientError = None
+    NoCredentialsError = None
+    EndpointConnectionError = None
 
 from app.qdrant_chunker import file_to_qdrant_chunks
 from app.qdrant_uploader import upload_chunks_to_qdrant
@@ -853,3 +864,341 @@ class ArchiveHandler:
             )
 
         logger.info("✓ Archive processing complete")
+
+
+class S3Handler:
+    """
+    Handles S3 bucket uploads to Qdrant.
+
+    Downloads bucket contents to temp directory and delegates to RepoHandler logic.
+    Supports bucket prefixes for targeted downloads.
+    Respects S3 object metadata and pagination for large buckets.
+    """
+
+    def __init__(self):
+        self.repo_handler = RepoHandler()
+
+    @staticmethod
+    def _parse_s3_uri(s3_uri: str) -> Tuple[str, str]:
+        """
+        Parse S3 URI in format s3://bucket-name/prefix/path.
+
+        Args:
+            s3_uri: S3 URI string
+
+        Returns:
+            Tuple of (bucket_name, prefix)
+
+        Raises:
+            ValueError: If URI format is invalid
+        """
+        if not s3_uri.startswith('s3://'):
+            raise ValueError(f"Invalid S3 URI format: {s3_uri}. Expected format: s3://bucket-name/prefix/path")
+
+        # Remove s3:// prefix
+        path = s3_uri[5:]
+
+        # Split into bucket and prefix
+        parts = path.split('/', 1)
+        bucket_name = parts[0]
+        prefix = parts[1] if len(parts) > 1 else ""
+
+        if not bucket_name:
+            raise ValueError("Bucket name cannot be empty in S3 URI")
+
+        return bucket_name, prefix
+
+    def _create_s3_client(self, endpoint: Optional[str], access_key: Optional[str],
+                         secret_key: Optional[str], region: str):
+        """
+        Initialize boto3 S3 client with authentication fallback.
+
+        Supports multiple authentication methods:
+        1. Explicit credentials (access_key/secret_key parameters)
+        2. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+        3. IAM roles (automatic for EC2/ECS/Lambda)
+        4. AWS profiles (~/.aws/credentials)
+
+        Args:
+            endpoint: Custom S3 endpoint URL (for MinIO, etc.)
+            access_key: AWS access key ID (optional)
+            secret_key: AWS secret access key (optional)
+            region: AWS region name
+
+        Returns:
+            boto3 S3 client
+
+        Raises:
+            ImportError: If boto3 is not installed
+        """
+        if boto3 is None:
+            raise ImportError(
+                "boto3 is required for S3 support. Install with: pip install boto3>=1.28.0"
+            )
+
+        # Build client kwargs
+        client_kwargs = {'region_name': region}
+
+        # Add custom endpoint if provided
+        if endpoint:
+            client_kwargs['endpoint_url'] = endpoint
+            logger.info("Using custom S3 endpoint: %s", endpoint)
+
+        # Add explicit credentials if provided
+        if access_key and secret_key:
+            client_kwargs['aws_access_key_id'] = access_key
+            client_kwargs['aws_secret_access_key'] = secret_key
+            logger.info("Using explicit AWS credentials")
+        else:
+            logger.info("Using default AWS credential chain (env vars, IAM role, or AWS profile)")
+
+        return boto3.client('s3', **client_kwargs)
+
+    def _should_skip_s3_object(self, key: str) -> bool:
+        """
+        Check if S3 object should be skipped based on existing patterns.
+
+        Args:
+            key: S3 object key (path)
+
+        Returns:
+            True if object should be skipped, False otherwise
+        """
+        path = Path(key)
+
+        # Skip if it's a directory marker (ends with /)
+        if key.endswith('/'):
+            return True
+
+        # Check against skip directories
+        parts = path.parts
+        if any(skip_dir in parts for skip_dir in _SKIP_DIRS):
+            return True
+
+        # Check against skip extensions
+        if path.suffix.lower() in _SKIP_EXTENSIONS:
+            return True
+
+        # Check against skip filenames
+        if path.name in _SKIP_NAMES:
+            return True
+
+        return False
+
+    def _download_bucket(self, s3_client, bucket: str, prefix: str,
+                        download_path: Path, debug_level: str):
+        """
+        Download S3 bucket contents to local directory.
+
+        Uses pagination to handle large buckets (>1000 objects).
+        Skips objects matching existing skip patterns.
+
+        Args:
+            s3_client: boto3 S3 client
+            bucket: S3 bucket name
+            prefix: S3 prefix/folder to download (empty for entire bucket)
+            download_path: Local path to download files to
+            debug_level: Debug verbosity level
+
+        Raises:
+            ClientError: For S3 errors (bucket not found, access denied, etc.)
+        """
+        try:
+            # Use paginator for large buckets
+            paginator = s3_client.get_paginator('list_objects_v2')
+            page_kwargs = {'Bucket': bucket}
+
+            if prefix:
+                page_kwargs['Prefix'] = prefix
+                logger.info("Downloading from S3 bucket '%s' with prefix '%s'", bucket, prefix)
+            else:
+                logger.info("Downloading from S3 bucket '%s' (entire bucket)", bucket)
+
+            pages = paginator.paginate(**page_kwargs)
+
+            # First pass: count total objects for progress bar
+            logger.info("Counting objects...")
+            total_objects = 0
+            try:
+                for page in pages:
+                    if 'Contents' in page:
+                        total_objects += len([
+                            obj for obj in page['Contents']
+                            if not self._should_skip_s3_object(obj['Key'])
+                        ])
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
+                if error_code == 'NoSuchBucket':
+                    raise ValueError(f"S3 bucket '{bucket}' does not exist")
+                elif error_code == 'AccessDenied':
+                    raise ValueError(f"Access denied to S3 bucket '{bucket}'. Check your credentials and permissions")
+                else:
+                    raise ValueError(f"S3 error: {e.response['Error']['Message']}")
+
+            if total_objects == 0:
+                logger.warning("No files found in bucket matching criteria")
+                return
+
+            logger.info("Found %d files to download", total_objects)
+
+            # Second pass: download with progress tracking
+            pages = paginator.paginate(**page_kwargs)
+            downloaded_count = 0
+
+            with tqdm(total=total_objects, desc="Downloading from S3", unit="file",
+                     disable=(debug_level != "VERBOSE")) as pbar:
+                for page in pages:
+                    if 'Contents' not in page:
+                        continue
+
+                    for obj in page['Contents']:
+                        key = obj['Key']
+
+                        if self._should_skip_s3_object(key):
+                            continue
+
+                        # Determine local path
+                        local_path = download_path / key
+                        local_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        # Download file
+                        try:
+                            s3_client.download_file(bucket, key, str(local_path))
+                            downloaded_count += 1
+                            pbar.update(1)
+                        except Exception as e:
+                            logger.warning("Failed to download %s: %s", key, e)
+                            continue
+
+            logger.info("✓ Downloaded %d files from S3", downloaded_count)
+
+        except NoCredentialsError:
+            raise ValueError(
+                "AWS credentials not found. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY "
+                "environment variables, configure IAM role, or use --access-key and --secret-key options"
+            )
+        except EndpointConnectionError as e:
+            raise ValueError(
+                f"Failed to connect to S3 endpoint. Check your network connection and endpoint URL. Error: {e}"
+            )
+
+    def _extract_archives_in_directory(self, directory: Path, debug_level: str):
+        """
+        Extract all archive files found in directory.
+
+        Walks through the directory, finds archives (.zip, .tar.gz, etc.),
+        extracts them in place, and removes the original archive files.
+
+        Args:
+            directory: Directory to scan for archives
+            debug_level: Debug verbosity level
+        """
+        archives_found = []
+
+        # Find all archive files
+        for root, dirs, files in os.walk(directory):
+            for filename in files:
+                file_path = Path(root) / filename
+                if is_archive_file(file_path):
+                    archives_found.append(file_path)
+
+        if not archives_found:
+            return
+
+        logger.info("Found %d archive(s) to extract", len(archives_found))
+
+        # Extract each archive
+        for archive_path in archives_found:
+            try:
+                # Create extraction directory (same location, without extension)
+                extract_to = archive_path.parent / archive_path.stem
+                extract_to.mkdir(exist_ok=True)
+
+                logger.info("Extracting archive: %s", archive_path.name)
+                _extract_archive(archive_path, extract_to)
+
+                # Remove the original archive file after successful extraction
+                archive_path.unlink()
+                logger.info("✓ Extracted and removed: %s", archive_path.name)
+
+            except Exception as e:
+                logger.warning("Failed to extract %s: %s", archive_path.name, e)
+                # Continue with other archives even if one fails
+
+        logger.info("✓ Archive extraction complete")
+
+    def handle(self, bucket_name: str, collection_name: str, embedding_model: str,
+               api_token: str, prefix: str = "", s3_endpoint: Optional[str] = None,
+               aws_access_key_id: Optional[str] = None, aws_secret_access_key: Optional[str] = None,
+               aws_region: str = "us-east-1", debug_level: str = "NONE",
+               qdrant_host: str = "localhost", qdrant_port: int = 6333):
+        """
+        Download S3 bucket contents and upload to Qdrant.
+
+        Args:
+            bucket_name: S3 bucket name (or s3://bucket/prefix URI)
+            collection_name: Qdrant collection name
+            embedding_model: Embedding model name
+            api_token: API token for embedding provider
+            prefix: S3 prefix/folder to download (optional)
+            s3_endpoint: Custom S3 endpoint URL (optional, defaults to AWS)
+            aws_access_key_id: AWS access key (optional, uses env/IAM if None)
+            aws_secret_access_key: AWS secret key (optional, uses env/IAM if None)
+            aws_region: AWS region (default: us-east-1)
+            debug_level: Debug verbosity ("NONE", "VERBOSE")
+            qdrant_host: Qdrant host
+            qdrant_port: Qdrant port
+        """
+        logger.info("Processing S3 bucket: %s", bucket_name)
+
+        # Parse S3 URI if provided
+        if bucket_name.startswith('s3://'):
+            logger.info("Detected S3 URI format")
+            parsed_bucket, uri_prefix = self._parse_s3_uri(bucket_name)
+            bucket_name = parsed_bucket
+            # URI prefix takes precedence over parameter prefix
+            if uri_prefix:
+                prefix = uri_prefix
+                logger.info("Using prefix from URI: %s", prefix)
+
+        # Create S3 client
+        s3_client = self._create_s3_client(
+            endpoint=s3_endpoint,
+            access_key=aws_access_key_id,
+            secret_key=aws_secret_access_key,
+            region=aws_region
+        )
+
+        # Download to temp directory and process
+        with tempfile.TemporaryDirectory() as temp_dir:
+            download_path = Path(temp_dir) / "s3_download"
+            download_path.mkdir()
+
+            logger.info("Downloading bucket contents to temporary directory")
+            self._download_bucket(
+                s3_client=s3_client,
+                bucket=bucket_name,
+                prefix=prefix,
+                download_path=download_path,
+                debug_level=debug_level
+            )
+
+            # Extract any archives found
+            logger.info("Checking for archives to extract")
+            self._extract_archives_in_directory(download_path, debug_level)
+
+            logger.info("Processing downloaded files")
+            stats = self.repo_handler._process_directory(
+                directory=download_path,
+                repo_name=bucket_name,  # Use bucket name as prefix in Qdrant
+                collection_name=collection_name,
+                embedding_model=embedding_model,
+                api_token=api_token,
+                debug_level=debug_level,
+                use_prefix=True,  # Enable deletion detection
+                qdrant_host=qdrant_host,
+                qdrant_port=qdrant_port
+            )
+            _print_summary(stats)
+
+        logger.info("✓ S3 bucket processing complete")

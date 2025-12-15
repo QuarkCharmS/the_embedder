@@ -1,0 +1,76 @@
+# RAG Embedder - Upload File Job Template
+#
+# This job uploads a single file or directory to Qdrant.
+# Each run generates a unique job name and auto-deletes after 5 minutes.
+#
+# Note: For file uploads, you'll need to either:
+#   1. Mount a ConfigMap/PVC with your files, or
+#   2. Use a custom image with files baked in
+#
+# Usage:
+#   1. Ensure the rag-embedder-env Secret exists (see secret.yaml)
+#   2. Edit FILE_PATH and COLLECTION_NAME below
+#   3. Add volume mounts for your source files
+#   4. Apply: kubectl apply -f upload-file-job.yaml
+#   5. Monitor: kubectl get jobs -w
+#   6. Check logs: kubectl logs job/rag-upload-file-<random-id>
+#
+# The job will automatically be deleted 300 seconds (5 minutes) after completion.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: rag-upload-file-  # Kubernetes will append random suffix
+  namespace: default
+spec:
+  # Delete job 5 minutes after completion (success or failure)
+  ttlSecondsAfterFinished: 300
+
+  # Don't retry on failure
+  backoffLimit: 0
+
+  template:
+    spec:
+      restartPolicy: Never
+
+      # Mount the secret and your source files
+      volumes:
+        - name: env-config
+          secret:
+            secretName: rag-embedder-env
+        # Add your file volume here (ConfigMap, PVC, etc.)
+        # - name: source-files
+        #   configMap:
+        #     name: my-source-files
+
+      containers:
+        - name: rag-cli
+          image: letpoquark/rag_embedder:latest
+          imagePullPolicy: IfNotPresent
+
+          # Mount the .env file from secret
+          volumeMounts:
+            - name: env-config
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+            # Mount your source files
+            # - name: source-files
+            #   mountPath: /data
+            #   readOnly: true
+
+          # File and collection parameters (override these)
+          env:
+            - name: FILE_PATH
+              value: "/data/myfile.py"  # Adjust to your mounted file path
+            - name: COLLECTION_NAME
+              value: "my-collection"
+
+          command:
+            - "python"
+            - "-m"
+            - "app.cli"
+            - "upload"
+            - "file"
+            - "$(FILE_PATH)"
+            - "$(COLLECTION_NAME)"

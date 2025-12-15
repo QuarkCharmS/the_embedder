@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: qdrant-ingress
+  namespace: rag-system        # change if needed
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+  - host: qdrant.35.175.111.253.nip.io   # replace with your node’s public IP
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: my-rag-system-qdrant             # your ClusterIP service name
+            port:
+              number: 6333               # qdrant HTTP API port exposed by the service

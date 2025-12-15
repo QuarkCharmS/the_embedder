@@ -32,6 +32,7 @@ This is a Retrieval-Augmented Generation (RAG) system that processes files, gene
 **Concrete Job Classes**:
 - **jobs/upload_file_job.py** - Upload single file
 - **jobs/upload_repo_job.py** - Clone and upload git repository
+- **jobs/upload_s3_job.py** - Download and upload S3 bucket contents
 - **jobs/collection_job.py** - Collection operations (create/delete/list)
 
 Jobs are **stateless** - they just build commands and environment variables for runtimes to execute.
@@ -54,7 +55,7 @@ All runtimes implement `execute(command, env_vars)` and return success/failure.
 
 **Purpose**: Execute the actual upload logic (called by worker.py)
 
-**Three Handler Classes**:
+**Four Handler Classes**:
 
 1. **FileHandler** - Upload single file
    - Validates file exists
@@ -69,6 +70,13 @@ All runtimes implement `execute(command, env_vars)` and return success/failure.
 3. **ArchiveHandler** - Extract and upload archive
    - Extracts to temp directory
    - Processes directory
+   - Cleans up temp files
+
+4. **S3Handler** - Download and upload S3 bucket contents
+   - Creates S3 client with authentication (IAM roles, env vars, explicit credentials)
+   - Downloads bucket contents to temp directory with pagination support
+   - Supports bucket prefixes and custom S3 endpoints
+   - Delegates to RepoHandler._process_directory() for deduplication and upload
    - Cleans up temp files
 
 ### 5. Qdrant Integration
@@ -294,6 +302,54 @@ User runs: python -m app sync /path/to/repo my_collection
 10. Exit with code 0
 ```
 
+### Flow 4: Upload S3 Bucket (Local Runtime)
+
+```
+User runs: python -m app upload s3 my-bucket my_collection --prefix docs/
+
+1. cli.py:upload_s3() called
+   - Validates arguments
+   - Parses S3 URI if provided
+   - Creates S3Handler
+   - Calls handler.handle()
+
+2. S3Handler.handle()
+   - Creates S3 client with boto3
+   - Determines authentication method:
+     - Explicit credentials from CLI args
+     - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+     - IAM role (automatic for EC2/ECS/Lambda)
+     - AWS profile (~/.aws/credentials)
+
+3. S3Handler._download_bucket()
+   - Creates paginator for list_objects_v2
+   - First pass: counts objects for progress bar
+   - Filters objects based on:
+     - Bucket prefix (if provided)
+     - Skip patterns (_SKIP_DIRS, _SKIP_EXTENSIONS, _SKIP_NAMES)
+   - Second pass: downloads files to temp directory
+     - Preserves folder structure
+     - Shows progress with tqdm
+     - Handles download errors gracefully
+
+4. S3Handler delegates to RepoHandler._process_directory()
+   - Treats bucket contents as a directory
+   - Uses bucket name as prefix (e.g., "my-bucket/")
+   - Enables incremental sync (use_prefix=True)
+
+5. RepoHandler._process_directory()
+   - Parallel hash computation (16 workers)
+   - Compares local file hashes with Qdrant
+   - Determines: new, modified, unchanged, deleted files
+   - Deletes old chunks for modified/deleted files
+   - Chunks and uploads new/modified files (4 thread workers)
+
+6. (Same as steps 5-8 from Flow 1 for each file)
+
+7. Cleanup temp directory
+8. Exit with code 0
+```
+
 ## Data Flow
 
 ### Embedding Storage in Qdrant
@@ -370,6 +426,11 @@ Required for all upload operations:
 
 Optional:
 - `GITHUB_TOKEN` - For private git repositories
+
+Optional for S3 uploads (falls back to IAM roles if not set):
+- `AWS_ACCESS_KEY_ID` - AWS access key for S3 authentication
+- `AWS_SECRET_ACCESS_KEY` - AWS secret key for S3 authentication
+- `AWS_REGION` - AWS region (default: "us-east-1")
 
 ### Runtime-Specific Config
 
@@ -460,10 +521,26 @@ Embeddings generated in parallel (CPU-bound), but Qdrant uploads sequential. Thi
 
 ### Adding New Upload Sources
 
+**Example: S3Handler** (recently added)
+
 1. Create new Handler in handlers.py
+   - `S3Handler` class with `handle()` method
+   - Downloads bucket to temp directory
+   - Delegates to `RepoHandler._process_directory()`
+
 2. Create new Job in jobs/
+   - `jobs/upload_s3_job.py` with `UploadS3Job` class
+   - Implements `get_command()` and `get_environment()`
+
 3. Add CLI command in cli.py
+   - Add subparser for `upload s3`
+   - Add handler invocation in `_handle_upload()`
+
 4. Add worker function in worker.py
+   - Add `upload_s3()` function
+   - Add operation handling in `main()`
+
+This pattern can be reused for other sources (e.g., Google Drive, Dropbox, Azure Blob Storage).
 
 ## Deployment Patterns
 

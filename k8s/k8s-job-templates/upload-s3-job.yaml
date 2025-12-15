@@ -1,0 +1,87 @@
+# RAG Embedder - Upload S3 Bucket Job Template
+#
+# This job downloads files from an S3 bucket and uploads embeddings to Qdrant.
+# Each run generates a unique job name and auto-deletes after 5 minutes.
+#
+# AWS Credentials:
+#   - Can use IAM roles (if running on EKS with IRSA)
+#   - Or provide AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in the secret
+#
+# Usage:
+#   1. Ensure the rag-embedder-env Secret exists with AWS credentials (see secret.yaml)
+#   2. Edit BUCKET_NAME, PREFIX, and COLLECTION_NAME below
+#   3. Apply: kubectl apply -f upload-s3-job.yaml
+#   4. Monitor: kubectl get jobs -w
+#   5. Check logs: kubectl logs job/rag-upload-s3-<random-id>
+#
+# The job will automatically be deleted 300 seconds (5 minutes) after completion.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: rag-upload-s3-  # Kubernetes will append random suffix
+  namespace: default
+spec:
+  # Delete job 5 minutes after completion (success or failure)
+  ttlSecondsAfterFinished: 300
+
+  # Don't retry on failure
+  backoffLimit: 0
+
+  template:
+    spec:
+      restartPolicy: Never
+
+      # Mount the secret as a volume
+      volumes:
+        - name: env-config
+          secret:
+            secretName: rag-embedder-env
+
+      containers:
+        - name: rag-cli
+          image: letpoquark/rag_embedder:latest
+          imagePullPolicy: IfNotPresent
+
+          # Mount the .env file from secret
+          volumeMounts:
+            - name: env-config
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+
+          # S3 and collection parameters (override these)
+          env:
+            - name: BUCKET_NAME
+              value: "my-bucket"
+            - name: PREFIX
+              value: ""  # Optional: e.g., "documents/" to only process a folder
+            - name: COLLECTION_NAME
+              value: "my-collection"
+            - name: AWS_REGION
+              value: "us-east-1"
+            # Optional: Custom S3 endpoint for MinIO, DigitalOcean Spaces, etc.
+            # - name: S3_ENDPOINT
+            #   value: "https://minio.example.com"
+
+          # Resource limits (S3 downloads are heavy workloads)
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+
+          command:
+            - "python"
+            - "-m"
+            - "app.cli"
+            - "upload"
+            - "s3"
+            - "$(BUCKET_NAME)"
+            - "$(COLLECTION_NAME)"
+            - "--prefix"
+            - "$(PREFIX)"
+            - "--region"
+            - "$(AWS_REGION)"

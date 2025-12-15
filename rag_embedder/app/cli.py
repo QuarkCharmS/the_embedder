@@ -177,6 +177,16 @@ Docker Usage:
         archive_parser.add_argument('path', help='Path to the archive (.zip, .tar.gz, etc.)')
         archive_parser.add_argument('collection', help='Target collection name')
 
+        # Upload S3 bucket
+        s3_parser = subparsers.add_parser('s3', help='Upload S3 bucket contents')
+        s3_parser.add_argument('bucket', help='S3 bucket name or s3://bucket/prefix URI')
+        s3_parser.add_argument('collection', help='Target collection name')
+        s3_parser.add_argument('--prefix', default="", help='S3 prefix/folder to download (optional)')
+        s3_parser.add_argument('--endpoint', help='Custom S3 endpoint URL (for MinIO, etc.)')
+        s3_parser.add_argument('--region', default='us-east-1', help='AWS region (default: us-east-1)')
+        s3_parser.add_argument('--access-key', help='AWS access key (optional, uses env/IAM if not provided)')
+        s3_parser.add_argument('--secret-key', help='AWS secret key (optional, uses env/IAM if not provided)')
+
     def _add_collections_subcommands(self, parser: argparse.ArgumentParser):
         """Add subcommands for collection management."""
         subparsers = parser.add_subparsers(dest='action', help='Collection action')
@@ -382,6 +392,38 @@ Docker Usage:
                     qdrant_port=args.qdrant_port
                 )
                 tqdm.write(f"\n✓ Successfully uploaded archive: {archive_path.name}")
+
+            elif args.source_type == 's3':
+                from app.handlers import S3Handler
+
+                # Parse S3 URI if provided
+                if args.bucket.startswith('s3://'):
+                    bucket_name, uri_prefix = S3Handler._parse_s3_uri(args.bucket)
+                    prefix = uri_prefix or args.prefix
+                else:
+                    bucket_name = args.bucket
+                    prefix = args.prefix
+
+                # Get AWS credentials from args or environment
+                access_key = args.access_key or os.getenv('AWS_ACCESS_KEY_ID')
+                secret_key = args.secret_key or os.getenv('AWS_SECRET_ACCESS_KEY')
+
+                handler = S3Handler()
+                handler.handle(
+                    bucket_name=bucket_name,
+                    collection_name=args.collection,
+                    embedding_model=embedding_model,
+                    api_token=args.api_token,
+                    prefix=prefix,
+                    s3_endpoint=args.endpoint,
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    aws_region=args.region,
+                    debug_level=debug_level,
+                    qdrant_host=args.qdrant_host,
+                    qdrant_port=args.qdrant_port
+                )
+                tqdm.write(f"\n✓ Successfully uploaded S3 bucket: {bucket_name}/{prefix}")
 
             return 0
 

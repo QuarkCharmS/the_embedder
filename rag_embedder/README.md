@@ -4,7 +4,8 @@ A powerful CLI tool for ingesting documents, code repositories, and archives int
 
 ## Features
 
-- **Multiple Source Types**: Upload files, git repositories, or archives (.zip, .tar.gz, etc.)
+- **Multiple Source Types**: Upload files, git repositories, archives (.zip, .tar.gz, etc.), or S3 buckets
+- **S3 Integration**: Direct upload from AWS S3, MinIO, DigitalOcean Spaces, and other S3-compatible storage
 - **Smart Chunking**: Automatic semantic chunking with support for 20+ file formats
 - **Flexible Embeddings**: Works with any embedding provider (OpenAI, DeepInfra, Cohere, Voyage AI, etc.)
 - **Incremental Sync**: Hash-based change detection for efficient updates
@@ -64,10 +65,17 @@ Edit `.env` file with your credentials:
 MODEL_NAME=Qwen/Qwen3-Embedding-8B
 API_TOKEN=your_api_token_here  # Works with any provider (DeepInfra, OpenAI, etc.)
 
-# Optional
+# Optional - Qdrant
 QDRANT_HOST=localhost
 QDRANT_PORT=6333
+
+# Optional - Git
 GITHUB_TOKEN=your_github_token  # For private repos
+
+# Optional - S3 (falls back to IAM roles if not set)
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_REGION=us-east-1
 ```
 
 ### 3. Create a Collection and Upload
@@ -124,6 +132,16 @@ rag-cli upload repo --api-token $API_TOKEN https://github.com/user/repo my_colle
 | `--version` | Show version | |
 | `--help` | Show help message | |
 
+### S3-Specific Options (for `upload s3` command)
+
+| Option | Description | Environment Variable |
+|--------|-------------|---------------------|
+| `--prefix` | S3 prefix/folder to download | - |
+| `--endpoint` | Custom S3 endpoint URL | - |
+| `--region` | AWS region | `AWS_REGION` |
+| `--access-key` | AWS access key ID | `AWS_ACCESS_KEY_ID` |
+| `--secret-key` | AWS secret access key | `AWS_SECRET_ACCESS_KEY` |
+
 **Note:** When uploading to a collection, the `--model` flag is **optional**. The system automatically fetches the embedding model from the collection's metadata (set during collection creation). You only need to specify `--model` if the collection was created without an embedding model.
 
 ### Commands
@@ -141,6 +159,20 @@ rag-cli upload repo https://github.com/user/repo.git my_collection
 
 # Upload an archive
 rag-cli upload archive project.tar.gz my_collection
+
+# Upload from S3 bucket
+rag-cli upload s3 my-bucket my_collection
+
+# Upload from S3 with prefix (specific folder)
+rag-cli upload s3 my-bucket my_collection --prefix documentation/
+
+# Upload from S3 using URI format
+rag-cli upload s3 s3://my-bucket/docs/ my_collection
+
+# Upload from custom S3 endpoint (MinIO, DigitalOcean Spaces, etc.)
+rag-cli upload s3 my-bucket my_collection \
+  --endpoint https://minio.example.com \
+  --region us-east-1
 ```
 
 #### Sync Commands
@@ -219,6 +251,107 @@ python -m app.cli --debug \
   upload archive project-docs.tar.gz my_collection
 ```
 
+### Example 5: Upload from S3 Bucket
+
+```bash
+# Basic S3 upload (uses IAM role or environment credentials)
+python -m app.cli \
+  --api-token $API_TOKEN \
+  upload s3 my-docs-bucket my_collection
+
+# S3 with explicit AWS credentials
+export AWS_ACCESS_KEY_ID=your_access_key
+export AWS_SECRET_ACCESS_KEY=your_secret_key
+python -m app.cli \
+  --api-token $API_TOKEN \
+  upload s3 my-docs-bucket my_collection
+
+# S3 with prefix (only upload specific folder)
+python -m app.cli \
+  --api-token $API_TOKEN \
+  upload s3 my-bucket my_collection --prefix api-docs/
+
+# S3 using URI format
+python -m app.cli \
+  --api-token $API_TOKEN \
+  upload s3 s3://my-bucket/documentation/ my_collection
+
+# Custom S3 endpoint (MinIO, DigitalOcean Spaces)
+python -m app.cli \
+  --api-token $API_TOKEN \
+  upload s3 my-bucket my_collection \
+  --endpoint https://nyc3.digitaloceanspaces.com \
+  --region us-east-1
+```
+
+## S3 Integration
+
+### Authentication Methods
+
+S3Handler supports multiple authentication methods with automatic fallback:
+
+1. **IAM Roles** (Recommended for AWS environments)
+   - Automatic when running on EC2, ECS, Lambda, or other AWS services
+   - No credentials needed in environment variables
+
+2. **Environment Variables**
+   ```bash
+   export AWS_ACCESS_KEY_ID=your_access_key
+   export AWS_SECRET_ACCESS_KEY=your_secret_key
+   export AWS_REGION=us-east-1  # Optional, defaults to us-east-1
+   ```
+
+3. **AWS Profile** (`~/.aws/credentials`)
+   - Automatically detected if credentials file exists
+
+4. **Explicit CLI Arguments**
+   ```bash
+   rag-cli upload s3 my-bucket my_collection \
+     --access-key YOUR_KEY \
+     --secret-key YOUR_SECRET \
+     --region us-west-2
+   ```
+
+### S3 Features
+
+- **Incremental Sync**: Only uploads new/modified files (hash-based deduplication)
+- **Large Bucket Support**: Handles buckets with >1000 objects via pagination
+- **Bucket Prefixes**: Download only specific folders within a bucket
+- **S3-Compatible Storage**: Works with MinIO, DigitalOcean Spaces, Wasabi, etc.
+- **Smart Filtering**: Automatically skips `.git`, `__pycache__`, binaries, etc.
+
+### S3 URI Format
+
+You can use either bucket name or full S3 URI:
+
+```bash
+# Bucket name only
+rag-cli upload s3 my-bucket my_collection
+
+# S3 URI with prefix
+rag-cli upload s3 s3://my-bucket/docs/api/ my_collection
+```
+
+### Custom S3 Endpoints
+
+For non-AWS S3-compatible storage:
+
+```bash
+# MinIO
+rag-cli upload s3 my-bucket my_collection \
+  --endpoint https://minio.example.com:9000
+
+# DigitalOcean Spaces
+rag-cli upload s3 my-bucket my_collection \
+  --endpoint https://nyc3.digitaloceanspaces.com \
+  --region us-east-1
+
+# Wasabi
+rag-cli upload s3 my-bucket my_collection \
+  --endpoint https://s3.wasabisys.com \
+  --region us-east-1
+```
+
 ## Docker Usage
 
 ### Using Docker Compose (Recommended)
@@ -230,6 +363,9 @@ docker-compose up -d
 # Run CLI commands
 docker-compose run rag-cli collections list
 docker-compose run rag-cli upload repo https://github.com/user/repo.git my_collection
+
+# Upload from S3 (AWS credentials from environment)
+docker-compose run rag-cli upload s3 my-bucket my_collection
 
 # Interactive mode
 docker-compose run rag-cli bash
@@ -260,6 +396,14 @@ docker run \
   -v $(pwd)/data:/data \
   -e API_TOKEN=$API_TOKEN \
   rag-cli upload file /data/document.pdf my_collection
+
+# Upload from S3 with AWS credentials
+docker run \
+  -e API_TOKEN=$API_TOKEN \
+  -e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
+  -e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY \
+  -e AWS_REGION=us-east-1 \
+  rag-cli upload s3 my-bucket my_collection
 ```
 
 ## Supported Embedding Models
@@ -298,11 +442,13 @@ Common examples:
 ### Processing Pipeline
 
 ```
-Source (File/Repo/Archive)
+Source (File/Repo/Archive/S3)
     ↓
-Git Clone / Extract (if needed)
+Download/Clone/Extract to temp directory (if needed)
     ↓
 File Discovery & Filtering
+    ↓
+Hash Comparison (Incremental Sync)
     ↓
 Semantic Chunking (via the_chunker)
     ↓
@@ -371,13 +517,31 @@ rag_embedder/
 │   ├── __init__.py
 │   ├── __main__.py          # Entry point for python -m app
 │   ├── cli.py               # Main CLI implementation
-│   ├── handlers.py          # File/Repo/Archive handlers
+│   ├── handlers.py          # File/Repo/Archive/S3 handlers
+│   ├── worker.py            # Container worker entry point
 │   ├── qdrant_manager.py    # Qdrant operations
 │   ├── embedder.py          # Embedding generation
 │   ├── qdrant_chunker.py    # Chunking wrapper
-│   └── git_utils.py         # Git operations
+│   ├── git_utils.py         # Git operations
+│   └── config.py            # Configuration management
+├── jobs/
+│   ├── base.py              # Job base class
+│   ├── upload_file_job.py   # File upload job
+│   ├── upload_repo_job.py   # Repo upload job
+│   ├── upload_s3_job.py     # S3 upload job
+│   └── collection_job.py    # Collection management job
+├── runtimes/
+│   ├── base.py              # Runtime base class
+│   ├── local.py             # Local execution
+│   ├── docker.py            # Docker execution
+│   ├── kubernetes.py        # Kubernetes execution
+│   └── aws_batch.py         # AWS Batch execution
 ├── tests/
 │   └── test_integration.py
+├── docs/
+│   ├── ARCHITECTURE.md      # Architecture documentation
+│   ├── HANDLERS_GUIDE.md    # Handlers guide
+│   └── ...
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt

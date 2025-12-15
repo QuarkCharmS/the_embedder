@@ -36,6 +36,9 @@ docker build -f rag_embedder/Dockerfile -t your-registry/rag-cli:v1.0.0 .
 |----------|-------------|---------|
 | `QDRANT_PORT` | Qdrant server port | `6333` |
 | `GITHUB_TOKEN` | GitHub personal access token for private repos | None |
+| `AWS_ACCESS_KEY_ID` | AWS access key for S3 uploads | None (uses IAM role if available) |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key for S3 uploads | None |
+| `AWS_REGION` | AWS region for S3 | `us-east-1` |
 | `DEBUG` | Enable debug output (`NONE`, `PARTIAL`, `FULL`) | `NONE` |
 
 ---
@@ -107,6 +110,63 @@ docker run --rm \
   -e API_TOKEN=your-api-token-here \
   rag-cli:latest \
   upload repo /data/my-repo.zip my_collection
+```
+
+### 5. Upload from S3 Bucket
+
+Upload files directly from AWS S3 or S3-compatible storage (MinIO, DigitalOcean Spaces, etc.):
+
+```bash
+# Using AWS credentials from environment
+docker run --rm \
+  --network host \
+  -e QDRANT_HOST=localhost \
+  -e MODEL_NAME=text-embedding-3-large \
+  -e API_TOKEN=your-api-token-here \
+  -e AWS_ACCESS_KEY_ID=your-aws-key \
+  -e AWS_SECRET_ACCESS_KEY=your-aws-secret \
+  rag-cli:latest \
+  upload s3 my-bucket my_collection
+```
+
+**Upload specific folder from S3:**
+```bash
+docker run --rm \
+  --network host \
+  -e QDRANT_HOST=localhost \
+  -e MODEL_NAME=text-embedding-3-large \
+  -e API_TOKEN=your-api-token-here \
+  -e AWS_ACCESS_KEY_ID=your-aws-key \
+  -e AWS_SECRET_ACCESS_KEY=your-aws-secret \
+  rag-cli:latest \
+  upload s3 my-bucket my_collection --prefix documentation/
+```
+
+**Using IAM role (no credentials needed):**
+```bash
+# When running on EC2/ECS with IAM role
+docker run --rm \
+  --network host \
+  -e QDRANT_HOST=localhost \
+  -e MODEL_NAME=text-embedding-3-large \
+  -e API_TOKEN=your-api-token-here \
+  rag-cli:latest \
+  upload s3 my-bucket my_collection
+```
+
+**Custom S3 endpoint (MinIO, DigitalOcean Spaces):**
+```bash
+docker run --rm \
+  --network host \
+  -e QDRANT_HOST=localhost \
+  -e MODEL_NAME=text-embedding-3-large \
+  -e API_TOKEN=your-api-token-here \
+  -e AWS_ACCESS_KEY_ID=your-key \
+  -e AWS_SECRET_ACCESS_KEY=your-secret \
+  rag-cli:latest \
+  upload s3 my-bucket my_collection \
+    --endpoint https://nyc3.digitaloceanspaces.com \
+    --region us-east-1
 ```
 
 ---

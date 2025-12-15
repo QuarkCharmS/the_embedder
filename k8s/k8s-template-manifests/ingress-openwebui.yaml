@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: openwebui-ingress
+  namespace: rag-system       # change if needed
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+  - host: openwebui.18.235.0.196.nip.io   # replace with your node’s public IP
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: open-webui             # your ClusterIP service name
+            port:
+              number: 8080               # Open WebUI HTTP port exposed by the service

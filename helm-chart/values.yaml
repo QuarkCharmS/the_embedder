@@ -80,7 +80,7 @@ qdrant:
   enabled: true
 
   # Number of Qdrant replicas for HA
-  replicaCount: 2 # Set to 3 for production HA cluster
+  replicaCount: 1 # Set to 3 for production HA cluster
 
   # Qdrant image
   image:
@@ -110,23 +110,24 @@ qdrant:
 
   # Service configuration
   service:
-    type: NodePort
+    # type: NodePort
+    type: ClusterIP
     ports:
       - name: http
         port: 6333
         targetPort: 6333
         protocol: TCP
-        nodePort: 30001
+        # nodePort: 30001
       - name: grpc
         port: 6334
         targetPort: 6334
         protocol: TCP
-        nodePort: 30002
+        # nodePort: 30002
       - name: p2p
         port: 6335
         targetPort: 6335
         protocol: TCP
-        nodePort: 30003
+        # nodePort: 30003
 
   # Resource limits
   resources:
@@ -160,12 +161,12 @@ qdrant:
 # Full configuration: https://github.com/open-webui/helm-charts
 # =============================================================================
 open-webui:
-  enabled: false
+  enabled: true
 
   # OpenWebUI image
   image:
-    #repository: ghcr.io/open-webui/open-webui
-    repository: localhost:5000/open-webui
+    repository: ghcr.io/open-webui/open-webui
+    #repository: localhost:5000/open-webui
     tag: main
     pullPolicy: IfNotPresent
 
@@ -182,8 +183,8 @@ open-webui:
     enabled: true  # This installs Pipelines as a subchart
 
     image:
-      #repository: ghcr.io/open-webui/pipelines
-      repository: localhost:5000/pipelines
+      repository: ghcr.io/open-webui/pipelines
+      #repository: localhost:5000/pipelines
       tag: main
       pullPolicy: IfNotPresent
 
@@ -221,10 +222,11 @@ open-webui:
 
   # Service configuration
   service:
-    type: NodePort #ClusterIP
+    # type: NodePort #ClusterIP
+    type: ClusterIP
     port: 8080
     containerPort: 8080
-    nodePort: 30001  # Set if using NodePort
+    # nodePort: 30001  # Set if using NodePort
 
   # Ingress for external access
   ingress:
