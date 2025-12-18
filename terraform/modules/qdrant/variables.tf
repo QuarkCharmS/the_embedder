@@ -42,7 +42,7 @@ variable "ebs_volume_size" {
 variable "qdrant_image" {
   description = "Qdrant Docker image"
   type        = string
-  default     = "qdrant/qdrant:latest"
+  default     = "qdrant/qdrant:v1.15.5"
 }
 
 variable "qdrant_memory" {
