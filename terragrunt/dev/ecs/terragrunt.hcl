@@ -24,6 +24,11 @@ dependency "vpc" {
 }
 
 inputs = {
+  # Region and environment
+  aws_region  = "us-east-1"
+  environment = "dev"
+
+  # ECS cluster configuration
   cluster_name              = "qdrant-cluster"
   enable_container_insights = true
 

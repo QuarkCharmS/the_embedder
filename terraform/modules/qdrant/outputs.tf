@@ -34,3 +34,8 @@ output "route53_zone_id" {
   description = "Route53 private hosted zone ID"
   value       = aws_route53_zone.private.zone_id
 }
+
+output "ecs_instances_security_group_id" {
+  description = "Security group ID for ECS instances"
+  value       = aws_security_group.ecs_instances.id
+}

@@ -17,3 +17,8 @@ output "nat_public_ips" {
   description = "NAT Gateway public IPs"
   value       = module.vpc.nat_public_ips
 }
+
+output "private_route_table_ids" {
+  description = "Private route table IDs"
+  value       = module.vpc.private_route_table_ids
+}

@@ -47,3 +47,35 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
+
+# Inline policy for Qdrant-specific ECR access
+resource "aws_iam_role_policy" "ecr_pull_qdrant" {
+  name = "ecr-pull-qdrant-only"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRTokenAccess"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "QdrantRepositoryAccessOnly"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage"
+        ]
+        Resource = [
+          "arn:aws:ecr:us-east-1:418472915322:repository/qdrant"
+        ]
+      }
+    ]
+  })
+}
