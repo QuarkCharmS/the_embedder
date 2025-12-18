@@ -9,6 +9,26 @@ variable "environment" {
   type        = string
 }
 
+variable "ecs_cluster_id" {
+  description = "ECS cluster ID from ECS module"
+  type        = string
+}
+
+variable "ecs_cluster_name" {
+  description = "ECS cluster name from ECS module"
+  type        = string
+}
+
+variable "ecs_instance_profile_name" {
+  description = "ECS instance IAM profile name from ECS module"
+  type        = string
+}
+
+variable "ecs_task_execution_role_arn" {
+  description = "ECS task execution role ARN from ECS module"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "VPC ID where Qdrant will be deployed"
   type        = string

@@ -1,7 +1,7 @@
 resource "aws_ecs_task_definition" "node1" {
   family             = "qdrant-node1"
   network_mode       = "bridge"
-  execution_role_arn = aws_iam_role.ecs_task_execution.arn
+  execution_role_arn = var.ecs_task_execution_role_arn
 
   volume {
     name      = "qdrant-data"
@@ -62,7 +62,7 @@ resource "aws_ecs_task_definition" "node1" {
 resource "aws_ecs_task_definition" "node2" {
   family             = "qdrant-node2"
   network_mode       = "bridge"
-  execution_role_arn = aws_iam_role.ecs_task_execution.arn
+  execution_role_arn = var.ecs_task_execution_role_arn
 
   volume {
     name      = "qdrant-data"

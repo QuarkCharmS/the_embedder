@@ -24,10 +24,10 @@ resource "aws_instance" "ecs_node1" {
   instance_type          = var.instance_type
   subnet_id              = var.private_subnet_ids[0]
   vpc_security_group_ids = [aws_security_group.ecs_instances.id]
-  iam_instance_profile   = aws_iam_instance_profile.ecs_instance.name
+  iam_instance_profile   = var.ecs_instance_profile_name
 
   user_data = base64encode(templatefile("${path.module}/user-data.sh", {
-    cluster_name = aws_ecs_cluster.main.name
+    cluster_name = var.ecs_cluster_name
     device_name  = "/dev/xvdf"
   }))
 
@@ -41,10 +41,10 @@ resource "aws_instance" "ecs_node2" {
   instance_type          = var.instance_type
   subnet_id              = var.private_subnet_ids[1]
   vpc_security_group_ids = [aws_security_group.ecs_instances.id]
-  iam_instance_profile   = aws_iam_instance_profile.ecs_instance.name
+  iam_instance_profile   = var.ecs_instance_profile_name
 
   user_data = base64encode(templatefile("${path.module}/user-data.sh", {
-    cluster_name = aws_ecs_cluster.main.name
+    cluster_name = var.ecs_cluster_name
     device_name  = "/dev/xvdf"
   }))
 

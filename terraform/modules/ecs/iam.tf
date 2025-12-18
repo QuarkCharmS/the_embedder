@@ -1,5 +1,5 @@
 resource "aws_iam_role" "ecs_instance" {
-  name_prefix = "qdrant-ecs-instance-"
+  name_prefix = "${var.cluster_name}-ecs-instance-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -24,12 +24,12 @@ resource "aws_iam_role_policy_attachment" "ecs_ssm" {
 }
 
 resource "aws_iam_instance_profile" "ecs_instance" {
-  name_prefix = "qdrant-ecs-instance-"
+  name_prefix = "${var.cluster_name}-ecs-instance-"
   role        = aws_iam_role.ecs_instance.name
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
-  name_prefix = "qdrant-ecs-task-exec-"
+  name_prefix = "${var.cluster_name}-ecs-task-exec-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

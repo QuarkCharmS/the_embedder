@@ -1,6 +1,6 @@
 resource "aws_ecs_service" "node1" {
   name            = "qdrant-node1"
-  cluster         = aws_ecs_cluster.main.id
+  cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.node1.arn
   desired_count   = 1
   launch_type     = "EC2"
@@ -18,7 +18,7 @@ resource "aws_ecs_service" "node1" {
 
 resource "aws_ecs_service" "node2" {
   name            = "qdrant-node2"
-  cluster         = aws_ecs_cluster.main.id
+  cluster         = var.ecs_cluster_id
   task_definition = aws_ecs_task_definition.node2.arn
   desired_count   = 1
   launch_type     = "EC2"

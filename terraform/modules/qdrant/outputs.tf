@@ -20,11 +20,6 @@ output "access_instructions" {
   EOT
 }
 
-output "ecs_cluster_name" {
-  description = "Name of the ECS cluster"
-  value       = aws_ecs_cluster.main.name
-}
-
 output "qdrant_node1_private_ip" {
   description = "Private IP of Qdrant node 1"
   value       = aws_instance.ecs_node1.private_ip
