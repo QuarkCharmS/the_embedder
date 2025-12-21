@@ -76,3 +76,44 @@ variable "enable_nipio_routing" {
   type        = bool
   default     = false
 }
+
+variable "alb_listener_arn" {
+  description = "Shared ALB listener ARN for adding rules"
+  type        = string
+}
+
+variable "alb_security_group_id" {
+  description = "Shared ALB security group ID"
+  type        = string
+}
+
+variable "route53_zone_id" {
+  description = "Route53 internal zone ID"
+  type        = string
+}
+
+variable "nlb_arn" {
+  description = "NLB ARN"
+  type        = string
+}
+
+variable "nlb_dns_name" {
+  description = "NLB DNS name"
+  type        = string
+}
+
+variable "nlb_zone_id" {
+  description = "NLB zone ID"
+  type        = string
+}
+
+variable "rag_connector_security_group_id" {
+  description = "RAG Connector security group ID"
+  type        = string
+}
+
+variable "tags" {
+  description = "Additional tags to apply to resources"
+  type        = map(string)
+  default     = {}
+}

@@ -1,17 +1,3 @@
-resource "aws_lb" "main" {
-  name               = "qdrant-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = var.public_subnet_ids
-
-  enable_deletion_protection = false
-
-  tags = {
-    Name = "qdrant-alb"
-  }
-}
-
 resource "aws_lb_target_group" "qdrant" {
   name     = "qdrant-api"
   port     = 6333
@@ -30,28 +16,19 @@ resource "aws_lb_target_group" "qdrant" {
 
   deregistration_delay = 30
 
-  tags = {
-    Name = "qdrant-api-tg"
-  }
+  tags = merge(
+    var.tags,
+    {
+      Name = "qdrant-api-tg"
+    }
+  )
 }
 
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.qdrant.arn
-  }
-}
-
-# Optional nip.io routing
 resource "aws_lb_listener_rule" "nip_io" {
   count = var.enable_nipio_routing ? 1 : 0
 
-  listener_arn = aws_lb_listener.http.arn
-  priority     = 100
+  listener_arn = var.alb_listener_arn
+  priority     = 200
 
   action {
     type             = "forward"
