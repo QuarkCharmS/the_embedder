@@ -2,8 +2,6 @@ locals {
   ecs_task_execution_role_name = element(split("/", var.ecs_task_execution_role_arn), length(split("/", var.ecs_task_execution_role_arn)) - 1)
 }
 
-data "aws_caller_identity" "current" {}
-
 resource "aws_iam_role_policy" "ecr_pull" {
   name = "ecr-pull-rag-connector"
   role = local.ecs_task_execution_role_name

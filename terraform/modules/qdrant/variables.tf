@@ -107,6 +107,11 @@ variable "nlb_zone_id" {
   type        = string
 }
 
+variable "vpc_cidr" {
+  description = "VPC CIDR block"
+  type        = string
+}
+
 variable "rag_connector_security_group_id" {
   description = "RAG Connector security group ID"
   type        = string

@@ -18,7 +18,7 @@ dependency "vpc" {
     vpc_cidr           = "10.0.0.0/16"
     private_subnet_ids = ["subnet-mock-1", "subnet-mock-2"]
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 dependency "ecs" {
@@ -29,7 +29,7 @@ dependency "ecs" {
     cluster_name                = "cluster-mock"
     ecs_task_execution_role_arn = "arn:aws:iam::123456789012:role/mock"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 dependency "nlb" {
@@ -38,7 +38,7 @@ dependency "nlb" {
   mock_outputs = {
     nlb_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/net/mock/1234567890"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 dependency "alb" {
@@ -48,7 +48,7 @@ dependency "alb" {
     alb_listener_arn      = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/mock/1234567890/1234567890"
     alb_security_group_id = "sg-mock"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 dependency "route53_internal" {
@@ -57,7 +57,7 @@ dependency "route53_internal" {
   mock_outputs = {
     zone_id = "Z123456789MOCK"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 inputs = {

@@ -46,3 +46,37 @@ resource "aws_vpc_endpoint" "s3" {
     }
   )
 }
+
+# CloudWatch Logs VPC Endpoint (for ECS task logging)
+resource "aws_vpc_endpoint" "logs" {
+  vpc_id              = var.vpc_id
+  service_name        = "com.amazonaws.us-east-1.logs"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = var.private_subnet_ids
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "logs-endpoint"
+    }
+  )
+}
+
+# SSM VPC Endpoint (for SSM Parameter Store access)
+resource "aws_vpc_endpoint" "ssm" {
+  vpc_id              = var.vpc_id
+  service_name        = "com.amazonaws.us-east-1.ssm"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = var.private_subnet_ids
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "ssm-endpoint"
+    }
+  )
+}

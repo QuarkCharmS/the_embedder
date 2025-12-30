@@ -19,10 +19,11 @@ dependency "vpc" {
 
   mock_outputs = {
     vpc_id             = "vpc-mock"
+    vpc_cidr           = "10.0.0.0/16"
     private_subnet_ids = ["subnet-mock-1", "subnet-mock-2"]
     public_subnet_ids  = ["subnet-mock-3", "subnet-mock-4"]
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 # Get ECS outputs
@@ -35,7 +36,7 @@ dependency "ecs" {
     ecs_instance_profile_name    = "instance-profile-mock"
     ecs_task_execution_role_arn  = "arn:aws:iam::123456789012:role/mock-role"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 # Get ALB outputs
@@ -46,7 +47,7 @@ dependency "alb" {
     alb_listener_arn      = "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/app/mock/1234567890/1234567890"
     alb_security_group_id = "sg-mock"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 # Get Route53 internal zone outputs
@@ -56,7 +57,7 @@ dependency "route53_internal" {
   mock_outputs = {
     zone_id = "Z123456789MOCK"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 # Get NLB outputs
@@ -68,7 +69,7 @@ dependency "nlb" {
     nlb_dns_name = "mock-nlb.elb.us-east-1.amazonaws.com"
     nlb_zone_id  = "Z123456789MOCK"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 # Get RAG Connector outputs
@@ -78,7 +79,7 @@ dependency "rag_connector" {
   mock_outputs = {
     security_group_id = "sg-mock"
   }
-  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan", "destroy"]
 }
 
 inputs = {
@@ -88,6 +89,7 @@ inputs = {
 
   # Network (from VPC module)
   vpc_id             = dependency.vpc.outputs.vpc_id
+  vpc_cidr           = dependency.vpc.outputs.vpc_cidr
   private_subnet_ids = dependency.vpc.outputs.private_subnet_ids
   public_subnet_ids  = dependency.vpc.outputs.public_subnet_ids
 

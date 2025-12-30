@@ -46,6 +46,16 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_from_rag_connector" {
   from_port                    = 6333
   to_port                      = 6333
   ip_protocol                  = "tcp"
+  description                  = "Allow rag-connector to access Qdrant"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "ecs_from_rag_embedder" {
+  security_group_id = aws_security_group.ecs_instances.id
+  cidr_ipv4         = var.vpc_cidr
+  from_port         = 6333
+  to_port           = 6333
+  ip_protocol       = "tcp"
+  description       = "Allow rag-embedder tasks to access Qdrant"
 }
 
 resource "aws_vpc_security_group_egress_rule" "ecs_all" {
