@@ -24,7 +24,7 @@ inputs = {
   aws_region  = "us-east-1"
   environment = "dev"
 
-  name       = "rag-connector-nlb"
+  name       = "dev-qdrant-nlb"
   vpc_id     = dependency.vpc.outputs.vpc_id
   subnet_ids = dependency.vpc.outputs.private_subnet_ids
 
