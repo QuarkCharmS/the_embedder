@@ -104,6 +104,9 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+.env-*
+env-*
 .venv
 env/
 venv/
@@ -177,3 +180,16 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 terragrunt-debug.tfvars.json
+
+# Kubernetes secrets
+**/secret.yaml
+**/secrets.yaml
+k8s/**/secret*.yaml
+
+# Docker compose with secrets
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Helm values with secrets
+**/values.local.yaml
+**/values-*.yaml
