@@ -1,6 +1,6 @@
 resource "aws_ecs_task_definition" "node1" {
   family             = "qdrant-node1"
-  network_mode       = "bridge"
+  network_mode       = "awsvpc"
   execution_role_arn = var.ecs_task_execution_role_arn
 
   volume {
@@ -23,12 +23,10 @@ resource "aws_ecs_task_definition" "node1" {
     portMappings = [
       {
         containerPort = 6333
-        hostPort      = 6333
         protocol      = "tcp"
       },
       {
         containerPort = 6335
-        hostPort      = 6335
         protocol      = "tcp"
       }
     ]
@@ -61,7 +59,7 @@ resource "aws_ecs_task_definition" "node1" {
 
 resource "aws_ecs_task_definition" "node2" {
   family             = "qdrant-node2"
-  network_mode       = "bridge"
+  network_mode       = "awsvpc"
   execution_role_arn = var.ecs_task_execution_role_arn
 
   volume {
@@ -111,12 +109,10 @@ resource "aws_ecs_task_definition" "node2" {
       portMappings = [
         {
           containerPort = 6333
-          hostPort      = 6333
           protocol      = "tcp"
         },
         {
           containerPort = 6335
-          hostPort      = 6335
           protocol      = "tcp"
         }
       ]

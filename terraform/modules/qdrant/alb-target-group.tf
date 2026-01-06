@@ -1,8 +1,9 @@
 resource "aws_lb_target_group" "qdrant" {
-  name     = "qdrant-api"
-  port     = 6333
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+  name        = "qdrant-api"
+  port        = 6333
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
 
   health_check {
     enabled             = true
@@ -40,16 +41,4 @@ resource "aws_lb_listener_rule" "nip_io" {
       values = ["qdrant.*.nip.io"]
     }
   }
-}
-
-resource "aws_lb_target_group_attachment" "node1" {
-  target_group_arn = aws_lb_target_group.qdrant.arn
-  target_id        = aws_instance.ecs_node1.id
-  port             = 6333
-}
-
-resource "aws_lb_target_group_attachment" "node2" {
-  target_group_arn = aws_lb_target_group.qdrant.arn
-  target_id        = aws_instance.ecs_node2.id
-  port             = 6333
 }
