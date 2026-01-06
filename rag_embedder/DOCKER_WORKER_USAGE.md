@@ -7,7 +7,7 @@ This guide explains how to build and use the 2-stage RAG Embedder Docker image f
 The Dockerfile must be built from the **parent directory** (one level up from rag_embedder) since it needs access to both `the_chunker` and `rag_embedder` directories:
 
 ```bash
-cd /home/santiago/rag_in_aws_the_big_project
+cd /home/santiago/the_embedder
 docker build -f rag_embedder/Dockerfile -t rag-embedder .
 ```
 

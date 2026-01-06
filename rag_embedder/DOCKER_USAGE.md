@@ -9,7 +9,7 @@ Complete guide for running the RAG CLI Docker container with environment variabl
 **Always build from the parent directory:**
 
 ```bash
-cd /home/santiago/rag_in_aws_the_big_project
+cd /home/santiago/the_embedder
 docker build -f rag_embedder/Dockerfile -t rag-cli:latest .
 ```
 
@@ -495,7 +495,7 @@ COLLECTION_NAME="company_docs"
 REPO_URL="git@github.com:company/docs.git"
 
 # Build image
-cd /home/santiago/rag_in_aws_the_big_project
+cd /home/santiago/the_embedder
 docker build -f rag_embedder/Dockerfile -t ${REGISTRY}/rag-cli:${IMAGE_TAG} .
 
 # Push to registry (if needed)
