@@ -1,4 +1,4 @@
-# RAG in AWS – The Big Project
+# The Embedder
 
 End-to-end Retrieval-Augmented Generation stack that handles ingestion, chunking, indexing, and serving results through Open WebUI. This monorepo packages every moving part: a production-grade ingestion CLI, a reusable chunker library, a FastAPI connector for Qdrant, and local/Docker/AWS deployment assets.
 

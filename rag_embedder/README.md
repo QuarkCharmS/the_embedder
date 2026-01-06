@@ -1,4 +1,4 @@
-# RAG in AWS
+# The Embedder - RAG CLI
 
 A powerful CLI tool for ingesting documents, code repositories, and archives into Qdrant vector database with automatic semantic chunking and embedding generation. Perfect for building RAG (Retrieval-Augmented Generation) systems.
 

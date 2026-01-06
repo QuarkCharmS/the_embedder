@@ -1,4 +1,4 @@
-# RAG in AWS - Project Summary
+# The Embedder - Project Summary
 
 ## Overview
 

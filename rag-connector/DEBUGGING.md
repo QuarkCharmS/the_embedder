@@ -81,7 +81,7 @@ Score Threshold: 0.7
 ============================================================
 Connecting to Qdrant at qdrant:6333...
 ✓ Successfully connected to Qdrant
-Available collections: ['rag_in_aws_full_project', 'test_collection']
+Available collections: ['embedder_docs', 'test_collection']
 ============================================================
 ```
 
@@ -98,7 +98,7 @@ Available collections: ['rag_in_aws_full_project', 'test_collection']
 Prompt: What is this about?
 LLM Model: Qwen/Qwen3-32B
 Embedding Model: Qwen/Qwen3-Embedding-8B
-Collection: rag_in_aws_full_project
+Collection: embedder_docs
 TOP_K: 3
 Using separate embedding key: False
 --------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ Step 1/4: Embedding query...
 ```
 Step 2/4: Searching Qdrant...
 🔍 Searching Qdrant
-   Collection: rag_in_aws_full_project
+   Collection: embedder_docs
    Vector dimensions: 4096
    TOP_K: 3
    Score threshold: 0.7

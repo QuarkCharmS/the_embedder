@@ -1,4 +1,4 @@
-# RAG in AWS - System Architecture
+# The Embedder - System Architecture
 
 ## Overview
 
